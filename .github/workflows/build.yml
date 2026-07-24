@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:20260610
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify toolchain
+        run: |
+          test -f "$DEVKITARM/3ds_rules"
+          test -f "$DEVKITPRO/libctru/include/3ds.h"
+          test -f "$DEVKITPRO/libctru/lib/libctru.a"
+          test -f "$DEVKITPRO/libctru/lib/libcitro3d.a"
+          test -f "$DEVKITPRO/libctru/lib/libcitro2d.a"
+          command -v python3
+          command -v g++
+      - name: Policy and syntax checks
+        run: make test
+      - name: Build 3DSX and CIA
+        shell: bash
+        run: |
+          set -o pipefail
+          make release -j2 2>&1 | tee build.log
+          cd dist
+          sha256sum -c SHA256SUMS.txt
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepShelter3D-build-log
+          path: build.log
+          if-no-files-found: warn
+      - name: Upload playable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepShelter3D-playable
+          path: |
+            dist/DeepShelter3D.3dsx
+            dist/DeepShelter3D.cia
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
