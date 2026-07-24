@@ -24,7 +24,14 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/TrustedClock.cpp" \
   -o "$BUILD_DIR/trusted_clock_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/shelter_camera_tests.cpp" \
+  "$ROOT/source/ShelterCamera.cpp" \
+  -o "$BUILD_DIR/shelter_camera_tests"
+
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
 "$BUILD_DIR/trusted_clock_tests"
-echo "host-tests: all core, persistence and time tests passed"
+"$BUILD_DIR/shelter_camera_tests"
+echo "host-tests: all core, persistence, time and rendering tests passed"
