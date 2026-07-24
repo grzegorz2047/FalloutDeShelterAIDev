@@ -13,10 +13,10 @@ int main() {
     const int before_cancel = grid.credits();
     const auto preview = grid.preview_excavate({0, 1});
     assert(preview.valid && preview.cost == 25);
-    assert(grid.credits() == before_cancel); // preview/cancel is side-effect free
+    assert(grid.credits() == before_cancel);
     assert(grid.confirm_excavate({0, 1}));
     assert(grid.credits() == before_cancel - 25);
-    assert(!grid.confirm_excavate({0, 1})); // double confirm cannot charge twice
+    assert(!grid.confirm_excavate({0, 1}));
     assert(grid.credits() == before_cancel - 25);
 
     assert(grid.preview_build({1, 0}, 2, CellType::Room, 100).valid);
@@ -32,14 +32,16 @@ int main() {
     assert(grid.confirm_excavate({1, 1}));
     assert(grid.confirm_build({1, 1}, 1, CellType::Room, 20));
     const auto path = grid.find_path({2, 0}, {1, 1});
+    const CellPosition expected_start{2, 0};
+    const CellPosition expected_end{1, 1};
     assert(path.found);
-    assert(path.cells.front() == CellPosition{2, 0});
-    assert(path.cells.back() == CellPosition{1, 1});
+    assert(path.cells.front() == expected_start);
+    assert(path.cells.back() == expected_end);
 
     const auto limited = grid.find_path({2, 0}, {1, 1}, 1);
     assert(!limited.found && limited.work_limit_reached);
 
-    assert(!grid.demolish({0, 0})); // sole vertical connection is protected
+    assert(!grid.demolish({0, 0}));
     assert(grid.demolish({1, 1}));
     assert(grid.cell({1, 1}) == CellType::Empty);
 
