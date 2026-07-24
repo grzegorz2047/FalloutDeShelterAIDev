@@ -1,6 +1,7 @@
 #include "dwellers/Dweller.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace deep_shelter::dwellers {
 
@@ -97,7 +98,7 @@ void DwellerService::resolve_equipment(const std::unordered_set<std::string>& we
             dweller.weapon_id = "weapon.unknown";
         if (!dweller.outfit_id.empty() && outfits.count(dweller.outfit_id) == 0) {
             dweller.outfit_id = "outfit.unknown";
-            dweller.outfit_bonus = {};
+            dweller.outfit_bonus.values.fill(0);
         }
         if (!dweller.companion_id.empty() && companions.count(dweller.companion_id) == 0)
             dweller.companion_id = "companion.unknown";
