@@ -4,9 +4,7 @@
 
 #include <cassert>
 #include <cmath>
-#include <stdexcept>
 
-using deep_shelter::core::Command;
 using deep_shelter::core::CommandQueue;
 using deep_shelter::core::CommandType;
 using deep_shelter::core::FixedStepClock;
@@ -39,15 +37,19 @@ void long_frame_is_bounded() {
     assert(clock.accumulator_seconds() < clock.step_seconds());
 }
 
-void invalid_time_is_rejected() {
+void invalid_time_is_ignored_without_mutation() {
     FixedStepClock clock;
-    bool rejected = false;
-    try {
-        clock.advance(-1.0, [](double) {});
-    } catch (const std::invalid_argument&) {
-        rejected = true;
-    }
-    assert(rejected);
+    const auto before = clock.accumulator_seconds();
+    assert(clock.advance(-1.0, [](double) {}) == 0);
+    assert(clock.advance(0.1, {}) == 0);
+    assert(clock.accumulator_seconds() == before);
+    assert(clock.total_steps() == 0);
+}
+
+void invalid_configuration_uses_safe_defaults() {
+    FixedStepClock clock(-1.0, 0, -2.0);
+    assert(clock.step_seconds() > 0.0);
+    assert(clock.advance(1.0, [](double) {}) == 1);
 }
 
 void state_transitions_are_explicit() {
@@ -81,7 +83,8 @@ void command_queue_is_fifo_and_bounded() {
 int main() {
     fixed_step_is_frame_partition_independent();
     long_frame_is_bounded();
-    invalid_time_is_rejected();
+    invalid_time_is_ignored_without_mutation();
+    invalid_configuration_uses_safe_defaults();
     state_transitions_are_explicit();
     command_queue_is_fifo_and_bounded();
     return 0;
