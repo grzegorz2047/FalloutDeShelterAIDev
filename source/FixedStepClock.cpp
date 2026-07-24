@@ -2,33 +2,23 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 namespace deep_shelter::core {
 
 FixedStepClock::FixedStepClock(double step_seconds,
                                std::size_t max_steps_per_frame,
                                double max_frame_seconds)
-    : step_seconds_(step_seconds),
-      max_steps_per_frame_(max_steps_per_frame),
-      max_frame_seconds_(max_frame_seconds) {
-    if (!std::isfinite(step_seconds_) || step_seconds_ <= 0.0) {
-        throw std::invalid_argument("step_seconds must be finite and positive");
-    }
-    if (max_steps_per_frame_ == 0) {
-        throw std::invalid_argument("max_steps_per_frame must be positive");
-    }
-    if (!std::isfinite(max_frame_seconds_) || max_frame_seconds_ <= 0.0) {
-        throw std::invalid_argument("max_frame_seconds must be finite and positive");
-    }
-}
+    : step_seconds_(std::isfinite(step_seconds) && step_seconds > 0.0
+                        ? step_seconds
+                        : 1.0 / 30.0),
+      max_steps_per_frame_(max_steps_per_frame > 0 ? max_steps_per_frame : 1),
+      max_frame_seconds_(std::isfinite(max_frame_seconds) && max_frame_seconds > 0.0
+                             ? max_frame_seconds
+                             : 0.25) {}
 
 std::size_t FixedStepClock::advance(double frame_seconds, const StepCallback& callback) {
-    if (!callback) {
-        throw std::invalid_argument("callback must be valid");
-    }
-    if (!std::isfinite(frame_seconds) || frame_seconds < 0.0) {
-        throw std::invalid_argument("frame_seconds must be finite and non-negative");
+    if (!callback || !std::isfinite(frame_seconds) || frame_seconds < 0.0) {
+        return 0;
     }
 
     accumulator_seconds_ += std::min(frame_seconds, max_frame_seconds_);
