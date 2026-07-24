@@ -29,6 +29,9 @@ jobs:
           test -f "$DEVKITPRO/libctru/lib/libcitro2d.a"
           command -v python3
           command -v g++
+      - name: Host architecture tests
+        shell: bash
+        run: bash scripts/run_host_tests.sh
       - name: Policy and syntax checks
         run: make test
       - name: Build 3DSX and CIA
