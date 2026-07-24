@@ -121,6 +121,44 @@ bool parse_awards(const std::string& value, std::unordered_set<int>& levels) {
     }
     return true;
 }
+
+std::optional<Dweller> read_legacy_v0(const std::string& payload, std::size_t offset) {
+    Dweller dweller;
+    int status = 0;
+    std::string base_special;
+    std::string children;
+    if (!read_integer(payload, offset, dweller.id) ||
+        !read_token(payload, offset, dweller.name) ||
+        !read_token(payload, offset, base_special) ||
+        !read_integer(payload, offset, dweller.level) ||
+        !read_integer(payload, offset, dweller.xp) ||
+        !read_integer(payload, offset, dweller.max_hp) ||
+        !read_integer(payload, offset, dweller.hp) ||
+        !read_integer(payload, offset, dweller.radiation) ||
+        !read_integer(payload, offset, dweller.happiness) ||
+        !read_integer(payload, offset, status) ||
+        !read_integer(payload, offset, dweller.room_id) ||
+        !read_token(payload, offset, dweller.weapon_id) ||
+        !read_token(payload, offset, dweller.outfit_id) ||
+        !read_token(payload, offset, dweller.companion_id) ||
+        !read_integer(payload, offset, dweller.parent_a) ||
+        !read_integer(payload, offset, dweller.parent_b) ||
+        !read_token(payload, offset, children) ||
+        !parse_stats(base_special, dweller.base_special) ||
+        !parse_ids(children, dweller.children) || offset != payload.size()) {
+        return std::nullopt;
+    }
+    if (status < static_cast<int>(ActivityStatus::Idle) ||
+        status > static_cast<int>(ActivityStatus::Dead))
+        return std::nullopt;
+
+    dweller.status = static_cast<ActivityStatus>(status);
+    const int migrated_level = std::clamp(dweller.level, 1, 50);
+    for (int level = 2; level <= migrated_level; ++level) dweller.awarded_levels.insert(level);
+    dweller.history.push_back({0, "schema_migrated", "v0_to_v1"});
+    dweller.normalize();
+    return dweller;
+}
 }  // namespace
 
 void SpecialStats::clamp(int minimum) noexcept {
@@ -306,8 +344,9 @@ std::string serialize_dweller(const Dweller& dweller) {
 std::optional<Dweller> deserialize_dweller(const std::string& payload) {
     std::size_t offset = 0;
     int schema = 0;
-    if (!read_integer(payload, offset, schema) || schema != Dweller::kSchemaVersion)
-        return std::nullopt;
+    if (!read_integer(payload, offset, schema)) return std::nullopt;
+    if (schema == 0) return read_legacy_v0(payload, offset);
+    if (schema != Dweller::kSchemaVersion) return std::nullopt;
 
     Dweller dweller;
     int status = 0;
