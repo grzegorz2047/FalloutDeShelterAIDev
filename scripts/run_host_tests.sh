@@ -18,6 +18,13 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/SaveData.cpp" \
   -o "$BUILD_DIR/save_data_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/trusted_clock_tests.cpp" \
+  "$ROOT/source/TrustedClock.cpp" \
+  -o "$BUILD_DIR/trusted_clock_tests"
+
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
-echo "host-tests: all core and persistence tests passed"
+"$BUILD_DIR/trusted_clock_tests"
+echo "host-tests: all core, persistence and time tests passed"
