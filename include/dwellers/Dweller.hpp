@@ -9,7 +9,7 @@
 
 namespace deep_shelter::dwellers {
 
-enum class ActivityStatus { Idle, Working, Training, Exploring, Questing, Injured, Dead };
+enum class ActivityStatus { Idle, Working, Training, Exploring, Questing, Injured, Dead, InTransit };
 
 struct SpecialStats {
     std::array<int, 7> values{{1, 1, 1, 1, 1, 1, 1}};
@@ -70,6 +70,7 @@ public:
     bool add(Dweller dweller);
     std::uint64_t add_with_unique_id(Dweller dweller);
     [[nodiscard]] Dweller* find(std::uint64_t id) noexcept;
+    [[nodiscard]] const Dweller* find(std::uint64_t id) const noexcept;
     [[nodiscard]] const std::vector<Dweller>& all() const noexcept;
     bool grant_xp(std::uint64_t id, std::int64_t amount, std::uint64_t transaction_id,
                   std::int64_t timestamp);
