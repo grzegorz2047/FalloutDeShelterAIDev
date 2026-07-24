@@ -1,7 +1,6 @@
 #include "rooms/RoomLifecycle.hpp"
 
 #include <algorithm>
-#include <unordered_set>
 
 namespace deep_shelter::rooms {
 
@@ -62,9 +61,7 @@ void RoomLifecycle::normalize_groups() {
     }
 }
 
-std::vector<RoomSegment> RoomLifecycle::normalized_segments() const {
-    return segments_;
-}
+std::vector<RoomSegment> RoomLifecycle::normalized_segments() const { return segments_; }
 
 LifecyclePreview RoomLifecycle::preview_upgrade(std::uint64_t group_id, int cost) const {
     LifecyclePreview preview;
@@ -99,12 +96,15 @@ LifecyclePreview RoomLifecycle::preview_upgrade(std::uint64_t group_id, int cost
     return preview;
 }
 
-bool RoomLifecycle::confirm_upgrade(std::uint64_t group_id, int cost) {
+bool RoomLifecycle::confirm_upgrade(std::uint64_t group_id, int cost,
+                                    std::uint64_t transaction_id) {
+    if (transaction_id == 0 || committed_transactions_.count(transaction_id) != 0) return false;
     const auto preview = preview_upgrade(group_id, cost);
     if (!preview.allowed) return false;
     const auto indices = group_indices(group_id);
     credits_ += preview.credit_delta;
     for (const auto index : indices) ++segments_[index].level;
+    committed_transactions_.insert(transaction_id);
     normalize_groups();
     return true;
 }
@@ -133,7 +133,10 @@ LifecyclePreview RoomLifecycle::preview_demolish(std::uint64_t segment_id, int r
     return preview;
 }
 
-bool RoomLifecycle::confirm_demolish(std::uint64_t segment_id, int refund, int relocation_capacity) {
+bool RoomLifecycle::confirm_demolish(std::uint64_t segment_id, int refund,
+                                     int relocation_capacity,
+                                     std::uint64_t transaction_id) {
+    if (transaction_id == 0 || committed_transactions_.count(transaction_id) != 0) return false;
     const auto preview = preview_demolish(segment_id, refund);
     if (!preview.allowed) return false;
     const int required = preview.residents_to_evacuate + preview.stored_units_to_relocate +
@@ -144,6 +147,7 @@ bool RoomLifecycle::confirm_demolish(std::uint64_t segment_id, int refund, int r
     if (it == segments_.end()) return false;
     credits_ += preview.credit_delta;
     segments_.erase(it);
+    committed_transactions_.insert(transaction_id);
     normalize_groups();
     return true;
 }
