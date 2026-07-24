@@ -48,6 +48,12 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/RoomCatalog.cpp" \
   -o "$BUILD_DIR/room_catalog_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/room_lifecycle_tests.cpp" \
+  "$ROOT/source/RoomLifecycle.cpp" \
+  -o "$BUILD_DIR/room_lifecycle_tests"
+
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
 "$BUILD_DIR/trusted_clock_tests"
@@ -55,4 +61,5 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/ui_framework_tests"
 "$BUILD_DIR/shelter_grid_tests"
 "$BUILD_DIR/room_catalog_tests"
-echo "host-tests: all core, persistence, time, rendering, UI, shelter and room catalog tests passed"
+"$BUILD_DIR/room_lifecycle_tests"
+echo "host-tests: all core, persistence, time, rendering, UI, shelter and room tests passed"
