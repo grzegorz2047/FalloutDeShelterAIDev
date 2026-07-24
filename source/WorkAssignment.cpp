@@ -38,12 +38,16 @@ bool WorkAssignmentService::remove_occupant(std::uint64_t room_id, std::uint64_t
 AssignmentError WorkAssignmentService::validate_target(const Dweller& dweller,
                                                         const WorkRoom& room) const {
     if (!dweller.alive() || dweller.status == ActivityStatus::Exploring ||
-        dweller.status == ActivityStatus::Questing)
+        dweller.status == ActivityStatus::Questing || dweller.status == ActivityStatus::InTransit)
         return AssignmentError::DwellerUnavailable;
     if (!room.available) return AssignmentError::RoomUnavailable;
     const bool already_inside =
         std::find(room.occupants.begin(), room.occupants.end(), dweller.id) != room.occupants.end();
-    if (!already_inside && static_cast<int>(room.occupants.size()) >= room.capacity)
+    std::size_t reservations = 0;
+    for (const auto& order : transit_) {
+        if (order.to_room_id == room.id && order.dweller_id != dweller.id) ++reservations;
+    }
+    if (!already_inside && room.occupants.size() + reservations >= static_cast<std::size_t>(room.capacity))
         return AssignmentError::RoomFull;
     return AssignmentError::None;
 }
@@ -52,7 +56,8 @@ int WorkAssignmentService::efficiency(std::uint64_t dweller_id, std::uint64_t ro
     const auto* dweller = const_cast<DwellerService&>(dwellers_).find(dweller_id);
     const auto* room = find_room(room_id);
     if (dweller == nullptr || room == nullptr || !room->available || !dweller->alive()) return 0;
-    const int stat = dweller->effective_special().values[static_cast<std::size_t>(room->preferred_special_index)];
+    const int stat =
+        dweller->effective_special().values[static_cast<std::size_t>(room->preferred_special_index)];
     return stat * 100 + dweller->level * 5;
 }
 
@@ -65,7 +70,7 @@ int WorkAssignmentService::group_efficiency(std::uint64_t room_id) const {
 }
 
 AssignmentPreview WorkAssignmentService::preview(std::uint64_t dweller_id,
-                                                 std::uint64_t room_id) const {
+                                                  std::uint64_t room_id) const {
     AssignmentPreview result;
     const auto* dweller = const_cast<DwellerService&>(dwellers_).find(dweller_id);
     if (dweller == nullptr) {
@@ -85,8 +90,8 @@ AssignmentPreview WorkAssignmentService::preview(std::uint64_t dweller_id,
 }
 
 AssignmentError WorkAssignmentService::move(std::uint64_t dweller_id, std::uint64_t room_id,
-                                            std::int64_t complete_at,
-                                            std::uint64_t command_sequence) {
+                                             std::int64_t complete_at,
+                                             std::uint64_t command_sequence) {
     auto* dweller = dwellers_.find(dweller_id);
     if (dweller == nullptr) return AssignmentError::UnknownDweller;
     auto* room = find_room(room_id);
@@ -103,7 +108,7 @@ AssignmentError WorkAssignmentService::move(std::uint64_t dweller_id, std::uint6
         if (a.complete_at != b.complete_at) return a.complete_at < b.complete_at;
         return a.sequence < b.sequence;
     });
-    dweller->status = ActivityStatus::Idle;
+    dweller->status = ActivityStatus::InTransit;
     return AssignmentError::None;
 }
 
@@ -113,8 +118,10 @@ void WorkAssignmentService::advance(std::int64_t now) {
         const TransitOrder order = transit_[index];
         auto* dweller = dwellers_.find(order.dweller_id);
         auto* target = find_room(order.to_room_id);
-        if (dweller != nullptr && target != nullptr &&
-            validate_target(*dweller, *target) == AssignmentError::None) {
+        if (dweller != nullptr) {
+            dweller->status = order.from_room_id == 0 ? ActivityStatus::Idle : ActivityStatus::Working;
+        }
+        if (dweller != nullptr && target != nullptr && validate_target(*dweller, *target) == AssignmentError::None) {
             remove_occupant(order.from_room_id, order.dweller_id);
             if (std::find(target->occupants.begin(), target->occupants.end(), order.dweller_id) ==
                 target->occupants.end())
@@ -122,7 +129,8 @@ void WorkAssignmentService::advance(std::int64_t now) {
             dweller->room_id = target->id;
             dweller->status = ActivityStatus::Working;
         } else if (dweller != nullptr) {
-            dweller->status = ActivityStatus::Idle;
+            dweller->room_id = order.from_room_id;
+            dweller->status = order.from_room_id == 0 ? ActivityStatus::Idle : ActivityStatus::Working;
         }
         ++index;
     }
@@ -140,6 +148,15 @@ bool WorkAssignmentService::remove_room(std::uint64_t room_id, std::int64_t time
         }
     }
     rooms_.erase(it);
+    for (const auto& order : transit_) {
+        if (order.to_room_id == room_id) {
+            if (auto* dweller = dwellers_.find(order.dweller_id)) {
+                dweller->room_id = order.from_room_id == room_id ? 0 : order.from_room_id;
+                dweller->status = dweller->room_id == 0 ? ActivityStatus::Idle : ActivityStatus::Working;
+                dweller->history.push_back({timestamp, "assignment_cancelled", "room_removed"});
+            }
+        }
+    }
     transit_.erase(std::remove_if(transit_.begin(), transit_.end(), [room_id](const TransitOrder& order) {
                        return order.to_room_id == room_id || order.from_room_id == room_id;
                    }),
@@ -149,14 +166,18 @@ bool WorkAssignmentService::remove_room(std::uint64_t room_id, std::int64_t time
 
 void WorkAssignmentService::cancel_for_dweller(std::uint64_t dweller_id, std::int64_t timestamp,
                                                const std::string& reason) {
-    transit_.erase(std::remove_if(transit_.begin(), transit_.end(), [dweller_id](const TransitOrder& order) {
-                       return order.dweller_id == dweller_id;
+    auto order = std::find_if(transit_.begin(), transit_.end(), [dweller_id](const TransitOrder& value) {
+        return value.dweller_id == dweller_id;
+    });
+    const std::uint64_t restore_room = order == transit_.end() ? 0 : order->from_room_id;
+    transit_.erase(std::remove_if(transit_.begin(), transit_.end(), [dweller_id](const TransitOrder& value) {
+                       return value.dweller_id == dweller_id;
                    }),
                    transit_.end());
     if (auto* dweller = dwellers_.find(dweller_id)) {
-        remove_occupant(dweller->room_id, dweller_id);
-        dweller->room_id = 0;
-        if (dweller->alive()) dweller->status = ActivityStatus::Idle;
+        dweller->room_id = restore_room;
+        if (dweller->alive())
+            dweller->status = restore_room == 0 ? ActivityStatus::Idle : ActivityStatus::Working;
         dweller->history.push_back({timestamp, "assignment_cancelled", reason});
     }
 }
