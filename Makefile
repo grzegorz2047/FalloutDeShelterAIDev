@@ -77,7 +77,7 @@ test:
 	@$(PYTHON) scripts/check_asset_policy.py
 	@$(PYTHON) -m py_compile scripts/check_asset_policy.py scripts/generate_release_assets.py
 
-3dsx: assets $(BUILD)
+3dsx: tools assets $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile 3dsx
 
 cia: tools assets $(BUILD)
