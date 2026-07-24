@@ -185,11 +185,11 @@ void draw_shelter(C3D_RenderTarget* target,
 }
 
 void draw_button(C2D_TextBuf buffer,
-                 float x,
-                 int id,
-                 int focused_id,
-                 bool enabled,
-                 const char* label) {
+                  float x,
+                  int id,
+                  int focused_id,
+                  bool enabled,
+                  const char* label) {
     const bool focused = id == focused_id;
     const u32 color = !enabled ? C2D_Color32(70, 70, 70, 255)
                                : focused ? C2D_Color32(232, 177, 67, 255)
@@ -199,9 +199,9 @@ void draw_button(C2D_TextBuf buffer,
 }
 
 void draw_bottom(C3D_RenderTarget* bottom,
-                 C2D_TextBuf buffer,
-                 const DemoState& state,
-                 const UiTree& ui) {
+                  C2D_TextBuf buffer,
+                  const DemoState& state,
+                  const UiTree& ui) {
     C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
     C2D_SceneBegin(bottom);
 
@@ -264,9 +264,14 @@ int main() {
     gfxInitDefault();
     gfxSet3D(true);
 
-    if (!C2D_Init(C2D_DEFAULT_MAX_OBJECTS)) {
+    if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) {
         gfxExit();
         return 1;
+    }
+    if (!C2D_Init(C2D_DEFAULT_MAX_OBJECTS)) {
+        C3D_Fini();
+        gfxExit();
+        return 2;
     }
 
     C2D_Prepare();
@@ -277,8 +282,9 @@ int main() {
     if (top_left == nullptr || top_right == nullptr || bottom == nullptr || text_buffer == nullptr) {
         if (text_buffer != nullptr) C2D_TextBufDelete(text_buffer);
         C2D_Fini();
+        C3D_Fini();
         gfxExit();
-        return 2;
+        return 3;
     }
 
     ShelterCamera camera({kColumns * kCellWidth, kRows * kCellHeight}, {400.0f, 240.0f});
@@ -351,6 +357,7 @@ int main() {
 
     C2D_TextBufDelete(text_buffer);
     C2D_Fini();
+    C3D_Fini();
     gfxExit();
     return 0;
 }
