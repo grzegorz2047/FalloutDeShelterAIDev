@@ -73,6 +73,13 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/WorkAssignment.cpp" \
   -o "$BUILD_DIR/work_assignment_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/population_lifecycle_tests.cpp" \
+  "$ROOT/source/Dweller.cpp" \
+  "$ROOT/source/PopulationLifecycle.cpp" \
+  -o "$BUILD_DIR/population_lifecycle_tests"
+
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
 "$BUILD_DIR/trusted_clock_tests"
@@ -84,4 +91,5 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/economy_simulation_tests"
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
-echo "host-tests: all core, persistence, time, rendering, UI, shelter, room, economy, dweller and work assignment tests passed"
+"$BUILD_DIR/population_lifecycle_tests"
+echo "host-tests: all core, persistence, time, rendering, UI, shelter, room, economy, dweller, work assignment and population tests passed"
