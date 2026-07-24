@@ -1,8 +1,43 @@
 #include "dwellers/Dweller.hpp"
 
 #include <cassert>
+#include <sstream>
 
 using namespace deep_shelter::dwellers;
+
+namespace {
+void token(std::ostringstream& stream, const std::string& value) {
+    stream << value.size() << ':' << value;
+}
+
+template <typename T>
+void number(std::ostringstream& stream, T value) {
+    token(stream, std::to_string(value));
+}
+
+std::string legacy_v0_payload() {
+    std::ostringstream stream;
+    number(stream, 0);
+    number(stream, 77);
+    token(stream, "Legacy,Resident");
+    token(stream, "4,5,6,7,8,9,10");
+    number(stream, 4);
+    number(stream, 650);
+    number(stream, 115);
+    number(stream, 90);
+    number(stream, 5);
+    number(stream, 80);
+    number(stream, static_cast<int>(ActivityStatus::Working));
+    number(stream, 12);
+    token(stream, "weapon.legacy");
+    token(stream, "outfit.legacy");
+    token(stream, "companion.legacy");
+    number(stream, 1);
+    number(stream, 2);
+    token(stream, "8,9");
+    return stream.str();
+}
+}  // namespace
 
 int main() {
     XpTable table{{0, 100, 300, 600, 1000}, 5};
@@ -25,7 +60,7 @@ int main() {
     dweller.outfit_id = "outfit.removed";
     dweller.companion_id = "companion.removed";
     dweller.children = {7, 9};
-    dweller.history.push_back({44, "recruited", "gate,alpha"});
+    dweller.history.push_back({44, "recruited", "gate,alpha|path\\beta"});
     assert(service.add(dweller));
     assert(!service.add(dweller));
     assert(service.valid_unique_ids());
@@ -75,7 +110,18 @@ int main() {
     assert(restored->awarded_levels == stored->awarded_levels);
     assert(restored->history.size() == stored->history.size());
     assert(restored->history.front().detail == stored->history.front().detail);
-    assert(!deserialize_dweller("2|unsupported").has_value());
+    assert(!deserialize_dweller("1:2unsupported").has_value());
+
+    const auto migrated = deserialize_dweller(legacy_v0_payload());
+    assert(migrated.has_value());
+    assert(migrated->id == 77);
+    assert(migrated->name == "Legacy,Resident");
+    assert(migrated->level == 4);
+    assert(migrated->awarded_levels.size() == 3);
+    assert(migrated->outfit_bonus.values[0] == 0);
+    assert(migrated->children.size() == 2);
+    assert(migrated->history.back().type == "schema_migrated");
+    assert(migrated->history.back().detail == "v0_to_v1");
 
     Dweller duplicate;
     duplicate.id = 1;
