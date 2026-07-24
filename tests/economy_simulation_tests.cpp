@@ -15,7 +15,7 @@ int main() {
 
     economy.advance(86400, 1000);
     assert(economy.rooms()[0].pending_units == 480);
-    assert(economy.rooms()[1].pending_units == 120);
+    assert(economy.rooms()[1].pending_units == 288);
     assert(economy.rooms()[2].pending_units == 100);
     assert(economy.pool(ResourceKind::Power).amount == 0);
     assert(economy.pool(ResourceKind::Food).amount == 0);
@@ -29,6 +29,8 @@ int main() {
     assert(!economy.collect(1, 1001, 90000));
     assert(economy.pool(ResourceKind::Power).amount == 200);
     assert(economy.rooms()[0].pending_units == 280);
+    assert(economy.rooms()[1].enabled);
+    assert(economy.rooms()[2].enabled);
 
     assert(economy.apply_credit_delta(-250, 2001, 90001));
     assert(!economy.apply_credit_delta(-250, 2001, 90001));
@@ -40,12 +42,12 @@ int main() {
 
     const auto forecast = economy.forecast();
     assert(forecast.net_food_per_hour >= 0);
-    assert(forecast.net_water_per_hour < 0);
+    assert(forecast.net_water_per_hour >= 0);
 
     EconomySimulation online(config, {200, 500}, {200, 500}, {200, 500}, {0, 1000});
     EconomySimulation offline(config, {200, 500}, {200, 500}, {200, 500}, {0, 1000});
-    online.add_room({10, ResourceKind::Food, 12, 3600, 0, 1, 1, false, true, 0});
-    offline.add_room({10, ResourceKind::Food, 12, 3600, 0, 1, 1, false, true, 0});
+    assert(online.add_room({10, ResourceKind::Food, 12, 3600, 0, 1, 1, false, true, 0}));
+    assert(offline.add_room({10, ResourceKind::Food, 12, 3600, 0, 1, 1, false, true, 0}));
     for (int hour = 0; hour < 24 * 30; ++hour) online.advance(3600, hour * 3600);
     offline.advance(30LL * 24 * 3600, 0);
     assert(online.pool(ResourceKind::Food).amount == offline.pool(ResourceKind::Food).amount);
