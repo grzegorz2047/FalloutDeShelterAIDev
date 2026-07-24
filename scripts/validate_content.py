@@ -13,22 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "romfs" / "data" / "catalog.json"
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$")
 SPECIAL = set("SPECIAL")
-ARRAY_SECTIONS = (
-    "rooms",
-    "resources",
-    "weapons",
-    "outfits",
-    "companions",
-    "robots",
-    "recipes",
-    "incidents",
-    "enemies",
-    "events",
-    "quests",
-    "dialogues",
-    "rewards",
-    "locations",
-)
+ARRAY_SECTIONS = ("rooms", "resources", "weapons", "outfits", "companions", "robots", "recipes", "incidents", "enemies", "events", "quests", "dialogues", "rewards", "locations")
 
 
 class ValidationError(Exception):
@@ -38,6 +23,10 @@ class ValidationError(Exception):
 def require(condition: bool, message: str, errors: list[str]) -> None:
     if not condition:
         errors.append(message)
+
+
+def is_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def load_catalog(path: Path = CATALOG) -> dict[str, Any]:
@@ -54,10 +43,8 @@ def load_catalog(path: Path = CATALOG) -> dict[str, Any]:
 
 def validate_catalog(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    require(data.get("schema_version") == 1, "schema_version must equal 1", errors)
-    require(isinstance(data.get("content_version"), str) and bool(data.get("content_version")),
-            "content_version must be a non-empty string", errors)
-
+    require(data.get("schema_version") == 1 and not isinstance(data.get("schema_version"), bool), "schema_version must equal integer 1", errors)
+    require(isinstance(data.get("content_version"), str) and bool(data.get("content_version")), "content_version must be a non-empty string", errors)
     for section in ARRAY_SECTIONS:
         require(isinstance(data.get(section), list), f"{section} must be an array", errors)
 
@@ -66,18 +53,15 @@ def validate_catalog(data: dict[str, Any]) -> list[str]:
     if not isinstance(translations, dict):
         translations = {}
     for language in ("en", "pl"):
-        require(isinstance(translations.get(language), dict),
-                f"translations.{language} must be an object", errors)
+        require(isinstance(translations.get(language), dict), f"translations.{language} must be an object", errors)
 
     ids: dict[str, str] = {}
     translation_keys: set[str] = set()
     for language, entries in translations.items():
         if isinstance(entries, dict):
             for key, value in entries.items():
-                require(isinstance(key, str) and bool(key),
-                        f"translations.{language} contains an invalid key", errors)
-                require(isinstance(value, str) and bool(value.strip()),
-                        f"translations.{language}.{key} must be non-empty text", errors)
+                require(isinstance(key, str) and bool(key), f"translations.{language} contains an invalid key", errors)
+                require(isinstance(value, str) and bool(value.strip()), f"translations.{language}.{key} must be non-empty text", errors)
                 translation_keys.add(key)
 
     en_keys = set(translations.get("en", {})) if isinstance(translations.get("en"), dict) else set()
@@ -97,8 +81,7 @@ def validate_catalog(data: dict[str, Any]) -> list[str]:
             if not isinstance(entry, dict):
                 continue
             identifier = entry.get("id")
-            require(isinstance(identifier, str) and bool(ID_RE.fullmatch(identifier or "")),
-                    f"{prefix}.id must match {ID_RE.pattern}", errors)
+            require(isinstance(identifier, str) and bool(ID_RE.fullmatch(identifier or "")), f"{prefix}.id must match {ID_RE.pattern}", errors)
             if isinstance(identifier, str):
                 previous = ids.get(identifier.lower())
                 if previous is not None:
@@ -107,20 +90,16 @@ def validate_catalog(data: dict[str, Any]) -> list[str]:
                     ids[identifier.lower()] = prefix
             for key in ("name_key", "description_key"):
                 if key in entry and entry[key] is not None:
-                    require(entry[key] in translation_keys,
-                            f"{prefix}.{key} references missing translation: {entry[key]}", errors)
+                    require(entry[key] in translation_keys, f"{prefix}.{key} references missing translation: {entry[key]}", errors)
 
     resource_ids = {entry.get("id") for entry in data.get("resources", []) if isinstance(entry, dict)}
     for index, resource in enumerate(data.get("resources", [])):
         if not isinstance(resource, dict):
             continue
-        minimum = resource.get("min")
-        maximum = resource.get("max")
-        require(isinstance(minimum, int) and isinstance(maximum, int),
-                f"resources[{index}] min/max must be integers", errors)
-        if isinstance(minimum, int) and isinstance(maximum, int):
-            require(0 <= minimum <= maximum,
-                    f"resources[{index}] must satisfy 0 <= min <= max", errors)
+        minimum, maximum = resource.get("min"), resource.get("max")
+        require(is_integer(minimum) and is_integer(maximum), f"resources[{index}] min/max must be integers", errors)
+        if is_integer(minimum) and is_integer(maximum):
+            require(0 <= minimum <= maximum, f"resources[{index}] must satisfy 0 <= min <= max", errors)
 
     for index, room in enumerate(data.get("rooms", [])):
         if not isinstance(room, dict):
@@ -128,26 +107,22 @@ def validate_catalog(data: dict[str, Any]) -> list[str]:
         prefix = f"rooms[{index}]"
         require(room.get("special") in SPECIAL, f"{prefix}.special must be one of SPECIAL", errors)
         for key in ("base_cost", "width", "max_level", "unlocks_at_population", "storage_bonus"):
-            require(isinstance(room.get(key), int) and room[key] >= 0,
-                    f"{prefix}.{key} must be a non-negative integer", errors)
-        require(room.get("width") in (1, 2, 3), f"{prefix}.width must be 1, 2 or 3", errors)
-        require(isinstance(room.get("max_level"), int) and room.get("max_level", 0) >= 1,
-                f"{prefix}.max_level must be at least 1", errors)
+            value = room.get(key)
+            require(is_integer(value) and value >= 0, f"{prefix}.{key} must be a non-negative integer", errors)
+        require(is_integer(room.get("width")) and room.get("width") in (1, 2, 3), f"{prefix}.width must be 1, 2 or 3", errors)
+        require(is_integer(room.get("max_level")) and room.get("max_level", 0) >= 1, f"{prefix}.max_level must be at least 1", errors)
         produced = room.get("produces")
-        require(produced is None or produced in resource_ids,
-                f"{prefix}.produces references unknown resource: {produced}", errors)
+        require(produced is None or produced in resource_ids, f"{prefix}.produces references unknown resource: {produced}", errors)
 
     for index, recipe in enumerate(data.get("recipes", [])):
         if not isinstance(recipe, dict):
             continue
-        inputs = recipe.get("inputs", [])
-        output = recipe.get("output")
+        inputs, output = recipe.get("inputs", []), recipe.get("output")
         require(isinstance(inputs, list), f"recipes[{index}].inputs must be an array", errors)
         require(isinstance(output, str), f"recipes[{index}].output must be an id", errors)
         if isinstance(output, str) and isinstance(inputs, list):
             input_ids = {item.get("id") for item in inputs if isinstance(item, dict)}
             require(output not in input_ids, f"recipes[{index}] directly consumes its own output", errors)
-
     return errors
 
 
