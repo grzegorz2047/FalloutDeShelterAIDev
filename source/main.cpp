@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "render/RoomVisuals.hpp"
 #include "render/ShelterCamera.hpp"
 #include "ui/UiFramework.hpp"
 
@@ -32,7 +33,11 @@ struct DemoState {
 };
 
 using deep_shelter::render::RenderStats;
+using deep_shelter::render::RoomVisual;
 using deep_shelter::render::ShelterCamera;
+using deep_shelter::render::draw_excavated_cell;
+using deep_shelter::render::draw_rock_cell;
+using deep_shelter::render::draw_room_cutaway;
 using deep_shelter::ui::InputFrame;
 using deep_shelter::ui::UiActionType;
 using deep_shelter::ui::UiTree;
@@ -125,11 +130,11 @@ void draw_text(C2D_TextBuf buffer,
 }
 
 void draw_shelter(C3D_RenderTarget* target,
-                   const ShelterCamera& camera,
-                   float eye_offset,
-                   const DemoState& state,
-                   RenderStats& stats) {
-    C2D_TargetClear(target, C2D_Color32(10, 18, 28, 255));
+                  const ShelterCamera& camera,
+                  float eye_offset,
+                  const DemoState& state,
+                  RenderStats& stats) {
+    C2D_TargetClear(target, C2D_Color32(8, 14, 22, 255));
     C2D_SceneBegin(target);
 
     const float zoom = camera.zoom();
@@ -142,54 +147,58 @@ void draw_shelter(C3D_RenderTarget* target,
                 continue;
             }
 
-            const float screen_x = (world_x - camera.x()) * zoom + eye_offset;
+            const float screen_x = (world_x - camera.x()) * zoom;
             const float screen_y = (world_y - camera.y()) * zoom;
             const float width = kCellWidth * zoom - 2.0f;
             const float height = kCellHeight * zoom - 2.0f;
             const bool excavated = row >= 2 && column >= 1 && column <= 10;
             const int room_index = column - 2;
             const bool room = row == 4 && room_index >= 0 && room_index < state.rooms;
-            const bool selected = room && room_index == state.selected_room;
-            const u32 color = selected
-                                  ? C2D_Color32(230, 176, 62, 255)
-                                  : room ? C2D_Color32(160, 104, 48, 255)
-                                         : excavated ? C2D_Color32(42, 70, 76, 255)
-                                                     : C2D_Color32(24, 34, 48, 255);
-            C2D_DrawRectSolid(screen_x, screen_y, 0.0f, width, height, color);
-            ++stats.draw_calls;
             ++stats.visible_cells;
 
             if (room) {
-                const float fill = room_index == state.selected_room
-                                       ? static_cast<float>(state.stored) / 30.0f
-                                       : 0.0f;
-                C2D_DrawRectSolid(screen_x + 4.0f,
-                                  screen_y + height - 8.0f,
-                                  0.1f,
-                                  std::max(0.0f, (width - 8.0f) * fill),
-                                  4.0f,
-                                  C2D_Color32(99, 205, 135, 255));
-                if (state.resident_assigned && room_index == state.selected_room) {
-                    const float size = std::max(4.0f, 9.0f * zoom);
-                    C2D_DrawRectSolid(screen_x + width * 0.5f - size * 0.5f,
-                                      screen_y + height - size - 10.0f,
-                                      0.2f,
-                                      size,
-                                      size,
-                                      C2D_Color32(235, 226, 178, 255));
-                }
+                const bool selected = room_index == state.selected_room;
+                draw_room_cutaway({screen_x,
+                                   screen_y,
+                                   width,
+                                   height,
+                                   zoom,
+                                   eye_offset,
+                                   selected ? static_cast<float>(state.stored) / 30.0f : 0.0f,
+                                   room_index,
+                                   selected,
+                                   state.resident_assigned && selected},
+                                  stats);
+            } else if (excavated) {
+                draw_excavated_cell(screen_x,
+                                    screen_y,
+                                    width,
+                                    height,
+                                    eye_offset,
+                                    column,
+                                    row,
+                                    stats);
+            } else {
+                draw_rock_cell(screen_x,
+                               screen_y,
+                               width,
+                               height,
+                               eye_offset,
+                               column,
+                               row,
+                               stats);
             }
         }
     }
-    stats.estimated_linear_memory = stats.visible_cells * sizeof(float) * 8;
+    stats.estimated_linear_memory = stats.visible_cells * sizeof(float) * 12;
 }
 
 void draw_button(C2D_TextBuf buffer,
-                  float x,
-                  int id,
-                  int focused_id,
-                  bool enabled,
-                  const char* label) {
+                 float x,
+                 int id,
+                 int focused_id,
+                 bool enabled,
+                 const char* label) {
     const bool focused = id == focused_id;
     const u32 color = !enabled ? C2D_Color32(70, 70, 70, 255)
                                : focused ? C2D_Color32(232, 177, 67, 255)
@@ -199,9 +208,9 @@ void draw_button(C2D_TextBuf buffer,
 }
 
 void draw_bottom(C3D_RenderTarget* bottom,
-                  C2D_TextBuf buffer,
-                  const DemoState& state,
-                  const UiTree& ui) {
+                 C2D_TextBuf buffer,
+                 const DemoState& state,
+                 const UiTree& ui) {
     C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
     C2D_SceneBegin(bottom);
 
