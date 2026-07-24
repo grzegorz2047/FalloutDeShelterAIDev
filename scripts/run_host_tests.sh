@@ -12,5 +12,12 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/GameStateMachine.cpp" \
   -o "$BUILD_DIR/core_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/save_data_tests.cpp" \
+  "$ROOT/source/SaveData.cpp" \
+  -o "$BUILD_DIR/save_data_tests"
+
 "$BUILD_DIR/core_tests"
-echo "host-tests: all core tests passed"
+"$BUILD_DIR/save_data_tests"
+echo "host-tests: all core and persistence tests passed"
