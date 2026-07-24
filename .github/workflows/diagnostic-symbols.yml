@@ -1,0 +1,36 @@
+name: Diagnostic symbols
+
+on:
+  push:
+    branches:
+      - agent/fix-hardware-startup-crash
+
+permissions:
+  contents: read
+
+jobs:
+  build-symbols:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:20260610
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build exact ARM binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          make release -j2
+          test -s DeepShelter3D.elf
+          test -s DeepShelter3D.map
+          arm-none-eabi-addr2line -f -C -e DeepShelter3D.elf 0x00103930 0x00103924 0x001076b4 > crash-symbols.txt
+          arm-none-eabi-objdump -d -C --start-address=0x001038d8 --stop-address=0x00103940 DeepShelter3D.elf > crash-disassembly.txt
+      - name: Upload diagnostic symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepShelter3D-diagnostic-symbols
+          path: |
+            DeepShelter3D.elf
+            DeepShelter3D.map
+            crash-symbols.txt
+            crash-disassembly.txt
+          if-no-files-found: error
