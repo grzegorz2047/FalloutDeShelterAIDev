@@ -127,9 +127,11 @@ void draw_workshop_equipment(const RoomVisual& v, float ix, float iy, float iw, 
 void draw_storage_equipment(const RoomVisual& v, float ix, float iy, float iw, float ih,
                             RenderStats& stats) {
     const float s = v.zoom;
+    const float crate_width = 14.0f * s;
+    const float gap = std::max(2.0f * s, (iw - crate_width * 3.0f) / 4.0f);
     for (int i = 0; i < 3; ++i) {
-        const float x = ix + (5.0f + i * 18.0f) * s;
-        rect(x, iy + ih - 18.0f * s, 0.33f, 14.0f * s, 14.0f * s,
+        const float x = ix + gap + static_cast<float>(i) * (crate_width + gap);
+        rect(x, iy + ih - 18.0f * s, 0.33f, crate_width, 14.0f * s,
              C2D_Color32(84, 70, 55, 255), stats);
         rect(x + 2.0f * s, iy + ih - 16.0f * s, 0.34f, 10.0f * s, 3.0f * s,
              C2D_Color32(189, 143, 73, 255), stats);
