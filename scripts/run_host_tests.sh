@@ -36,9 +36,16 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/UiFramework.cpp" \
   -o "$BUILD_DIR/ui_framework_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/shelter_grid_tests.cpp" \
+  "$ROOT/source/ShelterGrid.cpp" \
+  -o "$BUILD_DIR/shelter_grid_tests"
+
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
 "$BUILD_DIR/trusted_clock_tests"
 "$BUILD_DIR/shelter_camera_tests"
 "$BUILD_DIR/ui_framework_tests"
-echo "host-tests: all core, persistence, time, rendering and UI tests passed"
+"$BUILD_DIR/shelter_grid_tests"
+echo "host-tests: all core, persistence, time, rendering, UI and shelter tests passed"
