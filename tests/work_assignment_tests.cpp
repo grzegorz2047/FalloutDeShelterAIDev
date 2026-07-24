@@ -34,6 +34,7 @@ int main() {
 
     assert(work.move(1, 10, 100, 2) == AssignmentError::None);
     assert(dwellers.find(1)->status == ActivityStatus::InTransit);
+    assert(work.efficiency(1, 10) == 0);
     assert(work.move(1, 20, 100, 3) == AssignmentError::AlreadyInTransit);
     assert(work.move(2, 10, 100, 4) == AssignmentError::RoomFull);
     assert(dwellers.find(1)->room_id == 0);
@@ -47,6 +48,7 @@ int main() {
     assert(work.move(2, 10, 101, 1) == AssignmentError::RoomFull);
     assert(work.move(1, 20, 110, 4) == AssignmentError::None);
     assert(dwellers.find(1)->status == ActivityStatus::InTransit);
+    assert(work.group_efficiency(10) == 0);
     work.advance(110);
     assert(dwellers.find(1)->room_id == 20);
     assert(work.group_efficiency(10) == 0);
@@ -64,7 +66,9 @@ int main() {
     assert(dwellers.find(2)->room_id == 0);
     assert(dwellers.find(2)->status == ActivityStatus::Idle);
 
+    assert(work.move(1, 10, 150, 6) == AssignmentError::None);
     assert(work.remove_room(20, 140));
+    assert(work.transit_queue().empty());
     assert(dwellers.find(1)->room_id == 0);
     assert(dwellers.find(1)->status == ActivityStatus::Idle);
     assert(!work.remove_room(20, 141));
