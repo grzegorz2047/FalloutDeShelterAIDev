@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "content_version": "0.1.0",
+  "rooms": [
+    {
+      "id": "room.power_generator",
+      "category": "production",
+      "name_key": "room.power_generator.name",
+      "description_key": "room.power_generator.description",
+      "special": "S",
+      "base_cost": 100,
+      "width": 1,
+      "max_level": 3,
+      "unlocks_at_population": 0,
+      "produces": "resource.power",
+      "storage_bonus": 0
+    },
+    {
+      "id": "room.living_quarters",
+      "category": "residential",
+      "name_key": "room.living_quarters.name",
+      "description_key": "room.living_quarters.description",
+      "special": "C",
+      "base_cost": 150,
+      "width": 1,
+      "max_level": 3,
+      "unlocks_at_population": 0,
+      "produces": null,
+      "storage_bonus": 2
+    }
+  ],
+  "resources": [
+    {"id": "resource.power", "name_key": "resource.power.name", "min": 0, "max": 1000000},
+    {"id": "resource.food", "name_key": "resource.food.name", "min": 0, "max": 1000000},
+    {"id": "resource.water", "name_key": "resource.water.name", "min": 0, "max": 1000000},
+    {"id": "currency.credits", "name_key": "currency.credits.name", "min": 0, "max": 2147483647}
+  ],
+  "weapons": [],
+  "outfits": [],
+  "companions": [],
+  "robots": [],
+  "recipes": [],
+  "incidents": [],
+  "enemies": [],
+  "events": [],
+  "quests": [],
+  "dialogues": [],
+  "rewards": [],
+  "locations": [],
+  "translations": {
+    "en": {
+      "room.power_generator.name": "Power Generator",
+      "room.power_generator.description": "Produces power for shelter rooms.",
+      "room.living_quarters.name": "Living Quarters",
+      "room.living_quarters.description": "Increases population capacity.",
+      "resource.power.name": "Power",
+      "resource.food.name": "Food",
+      "resource.water.name": "Water",
+      "currency.credits.name": "Credits"
+    },
+    "pl": {
+      "room.power_generator.name": "Generator energii",
+      "room.power_generator.description": "Produkuje energię dla pomieszczeń schronu.",
+      "room.living_quarters.name": "Kwatery mieszkalne",
+      "room.living_quarters.description": "Zwiększają limit populacji.",
+      "resource.power.name": "Energia",
+      "resource.food.name": "Żywność",
+      "resource.water.name": "Woda",
+      "currency.credits.name": "Kredyty"
+    }
+  }
+}
