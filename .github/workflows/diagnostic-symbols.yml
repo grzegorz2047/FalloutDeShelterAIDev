@@ -1,6 +1,7 @@
 name: Diagnostic symbols
 
 on:
+  pull_request:
   push:
     branches:
       - agent/fix-hardware-startup-crash
