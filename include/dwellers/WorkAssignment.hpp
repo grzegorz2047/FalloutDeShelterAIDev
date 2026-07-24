@@ -10,7 +10,15 @@
 
 namespace deep_shelter::dwellers {
 
-enum class AssignmentError { None, UnknownDweller, UnknownRoom, RoomUnavailable, RoomFull, DwellerUnavailable, AlreadyInTransit };
+enum class AssignmentError {
+    None,
+    UnknownDweller,
+    UnknownRoom,
+    RoomUnavailable,
+    RoomFull,
+    DwellerUnavailable,
+    AlreadyInTransit
+};
 
 struct WorkRoom {
     std::uint64_t id = 0;
@@ -48,7 +56,8 @@ public:
 
     bool add_room(WorkRoom room);
     bool remove_room(std::uint64_t room_id, std::int64_t timestamp);
-    [[nodiscard]] AssignmentPreview preview(std::uint64_t dweller_id, std::uint64_t room_id) const;
+    [[nodiscard]] AssignmentPreview preview(std::uint64_t dweller_id,
+                                            std::uint64_t room_id) const;
     AssignmentError move(std::uint64_t dweller_id, std::uint64_t room_id,
                          std::int64_t complete_at, std::uint64_t command_sequence);
     void advance(std::int64_t now);
@@ -67,6 +76,8 @@ private:
     WorkRoom* find_room(std::uint64_t id) noexcept;
     const WorkRoom* find_room(std::uint64_t id) const noexcept;
     bool remove_occupant(std::uint64_t room_id, std::uint64_t dweller_id);
+    [[nodiscard]] int projected_efficiency(const Dweller& dweller,
+                                           const WorkRoom& room) const noexcept;
     AssignmentError validate_target(const Dweller& dweller, const WorkRoom& room) const;
 
     DwellerService& dwellers_;
