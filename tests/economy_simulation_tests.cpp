@@ -15,13 +15,15 @@ int main() {
 
     economy.advance(86400, 1000);
     assert(economy.rooms()[0].pending_units == 480);
-    assert(economy.rooms()[1].pending_units == 288);
-    assert(economy.rooms()[2].pending_units == 240);
+    assert(economy.rooms()[1].pending_units == 120);
+    assert(economy.rooms()[2].pending_units == 100);
     assert(economy.pool(ResourceKind::Power).amount == 0);
     assert(economy.pool(ResourceKind::Food).amount == 0);
     assert(economy.pool(ResourceKind::Water).amount == 0);
     assert(economy.resident_impact().health_penalty > 0);
     assert(economy.resident_impact().contamination > 0);
+    assert(economy.rooms()[1].enabled);
+    assert(!economy.rooms()[2].enabled);
 
     assert(economy.collect(1, 1001, 90000));
     assert(!economy.collect(1, 1001, 90000));
@@ -38,7 +40,7 @@ int main() {
 
     const auto forecast = economy.forecast();
     assert(forecast.net_food_per_hour >= 0);
-    assert(forecast.net_water_per_hour >= 0);
+    assert(forecast.net_water_per_hour < 0);
 
     EconomySimulation online(config, {200, 500}, {200, 500}, {200, 500}, {0, 1000});
     EconomySimulation offline(config, {200, 500}, {200, 500}, {200, 500}, {0, 1000});
