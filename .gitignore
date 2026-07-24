@@ -1,0 +1,12 @@
+build/
+dist/
+.tools/
+*.3dsx
+*.cia
+*.elf
+*.map
+*.smdh
+*.bnr
+*.icn
+__pycache__/
+*.pyc
