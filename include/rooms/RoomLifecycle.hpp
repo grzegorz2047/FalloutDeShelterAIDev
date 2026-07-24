@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace deep_shelter::rooms {
@@ -39,9 +39,10 @@ public:
 
     bool add_segment(RoomSegment segment);
     [[nodiscard]] LifecyclePreview preview_upgrade(std::uint64_t group_id, int cost) const;
-    bool confirm_upgrade(std::uint64_t group_id, int cost);
+    bool confirm_upgrade(std::uint64_t group_id, int cost, std::uint64_t transaction_id);
     [[nodiscard]] LifecyclePreview preview_demolish(std::uint64_t segment_id, int refund) const;
-    bool confirm_demolish(std::uint64_t segment_id, int refund, int relocation_capacity);
+    bool confirm_demolish(std::uint64_t segment_id, int refund, int relocation_capacity,
+                          std::uint64_t transaction_id);
 
 private:
     void normalize_groups();
@@ -51,6 +52,7 @@ private:
     int max_group_width_ = 3;
     int max_level_ = 3;
     std::vector<RoomSegment> segments_;
+    std::unordered_set<std::uint64_t> committed_transactions_;
 };
 
 }  // namespace deep_shelter::rooms
