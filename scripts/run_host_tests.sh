@@ -60,6 +60,12 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   "$ROOT/source/EconomySimulation.cpp" \
   -o "$BUILD_DIR/economy_simulation_tests"
 
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/dweller_tests.cpp" \
+  "$ROOT/source/Dweller.cpp" \
+  -o "$BUILD_DIR/dweller_tests"
+
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
 "$BUILD_DIR/trusted_clock_tests"
@@ -69,4 +75,5 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/room_catalog_tests"
 "$BUILD_DIR/room_lifecycle_tests"
 "$BUILD_DIR/economy_simulation_tests"
-echo "host-tests: all core, persistence, time, rendering, UI, shelter, room and economy tests passed"
+"$BUILD_DIR/dweller_tests"
+echo "host-tests: all core, persistence, time, rendering, UI, shelter, room, economy and dweller tests passed"
