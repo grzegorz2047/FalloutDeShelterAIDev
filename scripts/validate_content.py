@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "romfs" / "data" / "catalog.json"
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$")
 SPECIAL = set("SPECIAL")
+ROOM_CATEGORIES = {"production", "storage", "residential", "training", "medical", "recruitment", "crafting", "cosmetic", "special"}
 ARRAY_SECTIONS = ("rooms", "resources", "weapons", "outfits", "companions", "robots", "recipes", "incidents", "enemies", "events", "quests", "dialogues", "rewards", "locations")
 
 
@@ -101,18 +102,30 @@ def validate_catalog(data: dict[str, Any]) -> list[str]:
         if is_integer(minimum) and is_integer(maximum):
             require(0 <= minimum <= maximum, f"resources[{index}] must satisfy 0 <= min <= max", errors)
 
-    for index, room in enumerate(data.get("rooms", [])):
+    rooms = data.get("rooms", [])
+    require(isinstance(rooms, list) and len(rooms) >= 20, "rooms must contain at least 20 definitions", errors)
+    categories_seen: set[str] = set()
+    for index, room in enumerate(rooms if isinstance(rooms, list) else []):
         if not isinstance(room, dict):
             continue
         prefix = f"rooms[{index}]"
+        category = room.get("category")
+        require(category in ROOM_CATEGORIES, f"{prefix}.category must be a supported category", errors)
+        if category in ROOM_CATEGORIES:
+            categories_seen.add(category)
         require(room.get("special") in SPECIAL, f"{prefix}.special must be one of SPECIAL", errors)
-        for key in ("base_cost", "width", "max_level", "unlocks_at_population", "storage_bonus"):
+        require(isinstance(room.get("icon"), str) and room.get("icon", "").startswith("romfs:/"), f"{prefix}.icon must be a RomFS path", errors)
+        for key in ("base_cost", "width", "max_level", "unlocks_at_population", "unlocks_at_progress", "storage_bonus"):
             value = room.get(key)
             require(is_integer(value) and value >= 0, f"{prefix}.{key} must be a non-negative integer", errors)
+        require(is_integer(room.get("base_cost")) and room.get("base_cost", 0) > 0, f"{prefix}.base_cost must be positive", errors)
         require(is_integer(room.get("width")) and room.get("width") in (1, 2, 3), f"{prefix}.width must be 1, 2 or 3", errors)
         require(is_integer(room.get("max_level")) and room.get("max_level", 0) >= 1, f"{prefix}.max_level must be at least 1", errors)
+        achievement = room.get("requires_achievement")
+        require(achievement is None or (isinstance(achievement, str) and bool(ID_RE.fullmatch(achievement))), f"{prefix}.requires_achievement must be null or an id", errors)
         produced = room.get("produces")
         require(produced is None or produced in resource_ids, f"{prefix}.produces references unknown resource: {produced}", errors)
+    require(categories_seen == ROOM_CATEGORIES, f"rooms must cover full category matrix; got {sorted(categories_seen)}", errors)
 
     for index, recipe in enumerate(data.get("recipes", [])):
         if not isinstance(recipe, dict):
