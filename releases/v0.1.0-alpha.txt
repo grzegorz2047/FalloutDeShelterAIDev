@@ -1,0 +1,18 @@
+# Deep Shelter 3D v0.1.0-alpha
+
+Pierwszy techniczny pre-release projektu.
+
+## Zawartość
+
+- minimalna aplikacja Nintendo 3DS obsługująca oba ekrany;
+- oryginalna identyfikacja `Deep Shelter 3D`;
+- artefakty `.cia` i `.3dsx`;
+- deterministyczna ikona, banner i dźwięk bannera;
+- RomFS;
+- sumy SHA-256;
+- automatyczne sprawdzanie pochodzenia assetów;
+- automatyczny build i test startu w Azaharze.
+
+## Ograniczenia
+
+To fundament techniczny, a nie grywalna wersja zarządzania schronem. Nie zawiera jeszcze budowania, mieszkańców, ekonomii ani zapisu.
