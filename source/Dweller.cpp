@@ -2,50 +2,64 @@
 
 #include <algorithm>
 #include <charconv>
+#include <limits>
 #include <sstream>
 #include <utility>
 
 namespace deep_shelter::dwellers {
 
 namespace {
-std::string escape_field(const std::string& value) {
-    std::string result;
-    result.reserve(value.size());
-    for (const char ch : value) {
-        if (ch == '\\' || ch == '|' || ch == ',' || ch == ';') result.push_back('\\');
-        result.push_back(ch);
-    }
-    return result;
-}
-
-std::vector<std::string> split_escaped(const std::string& value, char separator) {
-    std::vector<std::string> result;
-    std::string current;
-    bool escaped = false;
-    for (const char ch : value) {
-        if (escaped) {
-            current.push_back(ch);
-            escaped = false;
-        } else if (ch == '\\') {
-            escaped = true;
-        } else if (ch == separator) {
-            result.push_back(current);
-            current.clear();
-        } else {
-            current.push_back(ch);
-        }
-    }
-    if (escaped) return {};
-    result.push_back(current);
-    return result;
-}
-
 template <typename T>
 bool parse_integer(const std::string& value, T& output) {
     const char* begin = value.data();
     const char* end = begin + value.size();
     const auto parsed = std::from_chars(begin, end, output);
     return parsed.ec == std::errc{} && parsed.ptr == end;
+}
+
+void write_token(std::ostringstream& stream, const std::string& value) {
+    stream << value.size() << ':' << value;
+}
+
+template <typename T>
+void write_integer(std::ostringstream& stream, T value) {
+    write_token(stream, std::to_string(value));
+}
+
+bool read_token(const std::string& payload, std::size_t& offset, std::string& output) {
+    if (offset >= payload.size()) return false;
+    const auto separator = payload.find(':', offset);
+    if (separator == std::string::npos || separator == offset) return false;
+
+    std::size_t length = 0;
+    if (!parse_integer(payload.substr(offset, separator - offset), length)) return false;
+    const std::size_t content_start = separator + 1;
+    if (length > payload.size() - content_start) return false;
+
+    output.assign(payload, content_start, length);
+    offset = content_start + length;
+    return true;
+}
+
+template <typename T>
+bool read_integer(const std::string& payload, std::size_t& offset, T& output) {
+    std::string token;
+    return read_token(payload, offset, token) && parse_integer(token, output);
+}
+
+std::vector<std::string> split_plain(const std::string& value, char separator) {
+    std::vector<std::string> result;
+    std::string current;
+    for (const char ch : value) {
+        if (ch == separator) {
+            result.push_back(current);
+            current.clear();
+        } else {
+            current.push_back(ch);
+        }
+    }
+    result.push_back(current);
+    return result;
 }
 
 std::string join_stats(const SpecialStats& stats) {
@@ -58,7 +72,7 @@ std::string join_stats(const SpecialStats& stats) {
 }
 
 bool parse_stats(const std::string& value, SpecialStats& stats) {
-    const auto fields = split_escaped(value, ',');
+    const auto fields = split_plain(value, ',');
     if (fields.size() != stats.values.size()) return false;
     for (std::size_t index = 0; index < fields.size(); ++index) {
         if (!parse_integer(fields[index], stats.values[index])) return false;
@@ -78,7 +92,7 @@ std::string join_ids(const std::vector<std::uint64_t>& ids) {
 bool parse_ids(const std::string& value, std::vector<std::uint64_t>& ids) {
     ids.clear();
     if (value.empty()) return true;
-    for (const auto& field : split_escaped(value, ',')) {
+    for (const auto& field : split_plain(value, ',')) {
         std::uint64_t id = 0;
         if (!parse_integer(field, id)) return false;
         ids.push_back(id);
@@ -100,7 +114,7 @@ std::string join_awards(const std::unordered_set<int>& levels) {
 bool parse_awards(const std::string& value, std::unordered_set<int>& levels) {
     levels.clear();
     if (value.empty()) return true;
-    for (const auto& field : split_escaped(value, ',')) {
+    for (const auto& field : split_plain(value, ',')) {
         int level = 0;
         if (!parse_integer(field, level)) return false;
         levels.insert(level);
@@ -129,7 +143,8 @@ void Dweller::normalize(int max_level) noexcept {
 SpecialStats Dweller::effective_special() const noexcept {
     SpecialStats result = base_special;
     for (std::size_t index = 0; index < result.values.size(); ++index) {
-        result.values[index] = std::clamp(result.values[index] + outfit_bonus.values[index], 1, 10);
+        result.values[index] =
+            std::clamp(result.values[index] + outfit_bonus.values[index], 1, 10);
     }
     return result;
 }
@@ -167,13 +182,20 @@ bool DwellerService::add(Dweller dweller) {
 }
 
 std::uint64_t DwellerService::next_unique_id() const noexcept {
+    std::unordered_set<std::uint64_t> used;
+    for (const auto& dweller : dwellers_) used.insert(dweller.id);
+
     std::uint64_t candidate = 1;
-    for (const auto& dweller : dwellers_) candidate = std::max(candidate, dweller.id + 1);
+    while (used.count(candidate) != 0) {
+        if (candidate == std::numeric_limits<std::uint64_t>::max()) return 0;
+        ++candidate;
+    }
     return candidate;
 }
 
 std::uint64_t DwellerService::add_with_unique_id(Dweller dweller) {
     if (dweller.id == 0 || find(dweller.id) != nullptr) dweller.id = next_unique_id();
+    if (dweller.id == 0) return 0;
     const auto assigned = dweller.id;
     return add(std::move(dweller)) ? assigned : 0;
 }
@@ -191,15 +213,29 @@ bool DwellerService::grant_xp(std::uint64_t id, std::int64_t amount,
     if (amount <= 0 || transaction_id == 0 || transactions_.count(transaction_id) != 0)
         return false;
     auto* dweller = find(id);
-    if (dweller == nullptr || !dweller->alive()) return false;
-    dweller->xp += amount;
-    const int target = table_.level_for_xp(dweller->xp);
+    if (dweller == nullptr || !dweller->alive() ||
+        amount > std::numeric_limits<std::int64_t>::max() - dweller->xp)
+        return false;
+
+    const std::int64_t new_xp = dweller->xp + amount;
+    const int target = table_.level_for_xp(new_xp);
+    int new_level_rewards = 0;
+    for (int candidate = dweller->level + 1; candidate <= target; ++candidate) {
+        if (dweller->awarded_levels.count(candidate) == 0) ++new_level_rewards;
+    }
+    if (new_level_rewards >
+        (std::numeric_limits<int>::max() - dweller->max_hp) / 5)
+        return false;
+
+    dweller->xp = new_xp;
     while (dweller->level < target) {
         const int next_level = dweller->level + 1;
         if (dweller->awarded_levels.insert(next_level).second) {
             dweller->level = next_level;
             dweller->max_hp += 5;
-            dweller->hp = std::min(dweller->effective_max_hp(), dweller->hp + 5);
+            const auto healed = static_cast<std::int64_t>(dweller->hp) + 5;
+            dweller->hp = static_cast<int>(std::min<std::int64_t>(
+                dweller->effective_max_hp(), healed));
             dweller->history.push_back({timestamp, "level_up", std::to_string(next_level)});
         } else {
             dweller->level = next_level;
@@ -235,88 +271,96 @@ bool DwellerService::valid_unique_ids() const noexcept {
 
 std::string serialize_dweller(const Dweller& dweller) {
     std::ostringstream stream;
-    stream << Dweller::kSchemaVersion << '|'
-           << dweller.id << '|'
-           << escape_field(dweller.name) << '|'
-           << escape_field(dweller.appearance_id) << '|'
-           << escape_field(dweller.presentation) << '|'
-           << escape_field(dweller.origin) << '|'
-           << join_stats(dweller.base_special) << '|'
-           << join_stats(dweller.outfit_bonus) << '|'
-           << dweller.level << '|'
-           << dweller.xp << '|'
-           << dweller.max_hp << '|'
-           << dweller.hp << '|'
-           << dweller.radiation << '|'
-           << dweller.happiness << '|'
-           << static_cast<int>(dweller.status) << '|'
-           << dweller.room_id << '|'
-           << escape_field(dweller.weapon_id) << '|'
-           << escape_field(dweller.outfit_id) << '|'
-           << escape_field(dweller.companion_id) << '|'
-           << dweller.parent_a << '|'
-           << dweller.parent_b << '|'
-           << join_ids(dweller.children) << '|'
-           << join_awards(dweller.awarded_levels) << '|'
-           << dweller.history.size();
+    write_integer(stream, Dweller::kSchemaVersion);
+    write_integer(stream, dweller.id);
+    write_token(stream, dweller.name);
+    write_token(stream, dweller.appearance_id);
+    write_token(stream, dweller.presentation);
+    write_token(stream, dweller.origin);
+    write_token(stream, join_stats(dweller.base_special));
+    write_token(stream, join_stats(dweller.outfit_bonus));
+    write_integer(stream, dweller.level);
+    write_integer(stream, dweller.xp);
+    write_integer(stream, dweller.max_hp);
+    write_integer(stream, dweller.hp);
+    write_integer(stream, dweller.radiation);
+    write_integer(stream, dweller.happiness);
+    write_integer(stream, static_cast<int>(dweller.status));
+    write_integer(stream, dweller.room_id);
+    write_token(stream, dweller.weapon_id);
+    write_token(stream, dweller.outfit_id);
+    write_token(stream, dweller.companion_id);
+    write_integer(stream, dweller.parent_a);
+    write_integer(stream, dweller.parent_b);
+    write_token(stream, join_ids(dweller.children));
+    write_token(stream, join_awards(dweller.awarded_levels));
+    write_integer(stream, dweller.history.size());
     for (const auto& event : dweller.history) {
-        stream << '|' << event.timestamp << ',' << escape_field(event.type) << ','
-               << escape_field(event.detail);
+        write_integer(stream, event.timestamp);
+        write_token(stream, event.type);
+        write_token(stream, event.detail);
     }
     return stream.str();
 }
 
 std::optional<Dweller> deserialize_dweller(const std::string& payload) {
-    const auto fields = split_escaped(payload, '|');
-    if (fields.size() < 24) return std::nullopt;
+    std::size_t offset = 0;
     int schema = 0;
-    if (!parse_integer(fields[0], schema) || schema != Dweller::kSchemaVersion) return std::nullopt;
+    if (!read_integer(payload, offset, schema) || schema != Dweller::kSchemaVersion)
+        return std::nullopt;
 
     Dweller dweller;
     int status = 0;
     std::size_t history_count = 0;
-    if (!parse_integer(fields[1], dweller.id) ||
-        !parse_stats(fields[6], dweller.base_special) ||
-        !parse_stats(fields[7], dweller.outfit_bonus) ||
-        !parse_integer(fields[8], dweller.level) ||
-        !parse_integer(fields[9], dweller.xp) ||
-        !parse_integer(fields[10], dweller.max_hp) ||
-        !parse_integer(fields[11], dweller.hp) ||
-        !parse_integer(fields[12], dweller.radiation) ||
-        !parse_integer(fields[13], dweller.happiness) ||
-        !parse_integer(fields[14], status) ||
-        !parse_integer(fields[15], dweller.room_id) ||
-        !parse_integer(fields[19], dweller.parent_a) ||
-        !parse_integer(fields[20], dweller.parent_b) ||
-        !parse_ids(fields[21], dweller.children) ||
-        !parse_awards(fields[22], dweller.awarded_levels) ||
-        !parse_integer(fields[23], history_count)) {
+    std::string base_special;
+    std::string outfit_bonus;
+    std::string children;
+    std::string awarded_levels;
+
+    if (!read_integer(payload, offset, dweller.id) ||
+        !read_token(payload, offset, dweller.name) ||
+        !read_token(payload, offset, dweller.appearance_id) ||
+        !read_token(payload, offset, dweller.presentation) ||
+        !read_token(payload, offset, dweller.origin) ||
+        !read_token(payload, offset, base_special) ||
+        !read_token(payload, offset, outfit_bonus) ||
+        !read_integer(payload, offset, dweller.level) ||
+        !read_integer(payload, offset, dweller.xp) ||
+        !read_integer(payload, offset, dweller.max_hp) ||
+        !read_integer(payload, offset, dweller.hp) ||
+        !read_integer(payload, offset, dweller.radiation) ||
+        !read_integer(payload, offset, dweller.happiness) ||
+        !read_integer(payload, offset, status) ||
+        !read_integer(payload, offset, dweller.room_id) ||
+        !read_token(payload, offset, dweller.weapon_id) ||
+        !read_token(payload, offset, dweller.outfit_id) ||
+        !read_token(payload, offset, dweller.companion_id) ||
+        !read_integer(payload, offset, dweller.parent_a) ||
+        !read_integer(payload, offset, dweller.parent_b) ||
+        !read_token(payload, offset, children) ||
+        !read_token(payload, offset, awarded_levels) ||
+        !read_integer(payload, offset, history_count) ||
+        !parse_stats(base_special, dweller.base_special) ||
+        !parse_stats(outfit_bonus, dweller.outfit_bonus) ||
+        !parse_ids(children, dweller.children) ||
+        !parse_awards(awarded_levels, dweller.awarded_levels)) {
         return std::nullopt;
     }
     if (status < static_cast<int>(ActivityStatus::Idle) ||
-        status > static_cast<int>(ActivityStatus::Dead) ||
-        fields.size() != 24 + history_count) {
+        status > static_cast<int>(ActivityStatus::Dead))
         return std::nullopt;
-    }
-
-    dweller.name = fields[2];
-    dweller.appearance_id = fields[3];
-    dweller.presentation = fields[4];
-    dweller.origin = fields[5];
     dweller.status = static_cast<ActivityStatus>(status);
-    dweller.weapon_id = fields[16];
-    dweller.outfit_id = fields[17];
-    dweller.companion_id = fields[18];
 
     for (std::size_t index = 0; index < history_count; ++index) {
-        const auto event_fields = split_escaped(fields[24 + index], ',');
-        if (event_fields.size() != 3) return std::nullopt;
         DwellerEvent event;
-        if (!parse_integer(event_fields[0], event.timestamp)) return std::nullopt;
-        event.type = event_fields[1];
-        event.detail = event_fields[2];
+        if (!read_integer(payload, offset, event.timestamp) ||
+            !read_token(payload, offset, event.type) ||
+            !read_token(payload, offset, event.detail))
+            return std::nullopt;
         dweller.history.push_back(std::move(event));
     }
+    if (offset != payload.size()) return std::nullopt;
+
     dweller.normalize();
     return dweller;
 }
