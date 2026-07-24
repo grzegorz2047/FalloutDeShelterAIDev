@@ -38,6 +38,10 @@ def main() -> None:
     bad_number["rooms"][0]["base_cost"] = -1
     expect_error(bad_number, "base_cost")
 
+    boolean_number = copy.deepcopy(valid)
+    boolean_number["rooms"][0]["base_cost"] = True
+    expect_error(boolean_number, "base_cost")
+
     cycle = copy.deepcopy(valid)
     cycle["recipes"] = [{"id": "recipe.loop", "inputs": [{"id": "item.loop", "count": 1}], "output": "item.loop"}]
     expect_error(cycle, "consumes its own output")
