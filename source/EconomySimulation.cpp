@@ -23,14 +23,20 @@ EconomySimulation::EconomySimulation(EconomyConfig config, ResourcePool power,
     config_.food_use_per_hour = std::max<std::int64_t>(0, config_.food_use_per_hour);
     config_.water_use_per_hour = std::max<std::int64_t>(0, config_.water_use_per_hour);
     config_.max_step_seconds = std::max<std::int64_t>(1, config_.max_step_seconds);
-    clamp_pool(power_); clamp_pool(food_); clamp_pool(water_); clamp_pool(credits_);
+    clamp_pool(power_);
+    clamp_pool(food_);
+    clamp_pool(water_);
+    clamp_pool(credits_);
 }
 
 bool EconomySimulation::add_room(ProductionRoom room) {
     if (room.id == 0 || room.units_per_cycle < 0 || room.cycle_seconds <= 0 || room.workers < 0)
         return false;
-    for (const auto& existing : rooms_) if (existing.id == room.id) return false;
-    room.progress_seconds = std::clamp<std::int64_t>(room.progress_seconds, 0, room.cycle_seconds - 1);
+    for (const auto& existing : rooms_) {
+        if (existing.id == room.id) return false;
+    }
+    room.progress_seconds = std::clamp<std::int64_t>(room.progress_seconds, 0,
+                                                     room.cycle_seconds - 1);
     room.pending_units = std::max<std::int64_t>(0, room.pending_units);
     rooms_.push_back(room);
     rebalance_power();
@@ -43,9 +49,11 @@ ResourcePool& EconomySimulation::mutable_pool(ResourceKind kind) noexcept {
     if (kind == ResourceKind::Water) return water_;
     return credits_;
 }
+
 const ResourcePool& EconomySimulation::const_pool(ResourceKind kind) const noexcept {
     return const_cast<EconomySimulation*>(this)->mutable_pool(kind);
 }
+
 void EconomySimulation::clamp_pool(ResourcePool& pool) noexcept {
     pool.capacity = std::max<std::int64_t>(0, pool.capacity);
     pool.amount = std::clamp<std::int64_t>(pool.amount, 0, pool.capacity);
@@ -54,7 +62,8 @@ void EconomySimulation::clamp_pool(ResourcePool& pool) noexcept {
 bool EconomySimulation::collect(std::uint64_t room_id, std::uint64_t transaction_id,
                                 std::int64_t timestamp) {
     if (transaction_id == 0 || transactions_.count(transaction_id) != 0) return false;
-    auto it = std::find_if(rooms_.begin(), rooms_.end(), [room_id](const auto& room){ return room.id == room_id; });
+    auto it = std::find_if(rooms_.begin(), rooms_.end(),
+                           [room_id](const auto& room) { return room.id == room_id; });
     if (it == rooms_.end() || it->pending_units <= 0) return false;
     auto& target = mutable_pool(it->output);
     const auto room_available = target.capacity - target.amount;
@@ -64,6 +73,7 @@ bool EconomySimulation::collect(std::uint64_t room_id, std::uint64_t transaction
     it->pending_units -= accepted;
     transactions_.insert(transaction_id);
     journal_.push_back({timestamp, "collect", it->output, accepted, room_id});
+    if (it->output == ResourceKind::Power) rebalance_power();
     return true;
 }
 
@@ -88,6 +98,7 @@ void EconomySimulation::set_capacity(ResourceKind kind, std::int64_t capacity) {
     clamp_pool(target);
     if (target.amount != before)
         journal_.push_back({0, "capacity_overflow_discard", kind, target.amount - before, 0});
+    if (kind == ResourceKind::Power) rebalance_power();
 }
 
 void EconomySimulation::consume(std::int64_t seconds, std::int64_t timestamp) {
@@ -98,9 +109,12 @@ void EconomySimulation::consume(std::int64_t seconds, std::int64_t timestamp) {
         if (taken > 0) journal_.push_back({timestamp, "consume", kind, -taken, 0});
         return required - taken;
     };
-    const auto power_missing = consume_one(power_, config_.power_use_per_hour, ResourceKind::Power);
-    const auto food_missing = consume_one(food_, config_.food_use_per_hour, ResourceKind::Food);
-    const auto water_missing = consume_one(water_, config_.water_use_per_hour, ResourceKind::Water);
+    const auto power_missing = consume_one(power_, config_.power_use_per_hour,
+                                           ResourceKind::Power);
+    const auto food_missing = consume_one(food_, config_.food_use_per_hour,
+                                          ResourceKind::Food);
+    const auto water_missing = consume_one(water_, config_.water_use_per_hour,
+                                           ResourceKind::Water);
     if (food_missing > 0) {
         resident_impact_.hunger_seconds += seconds;
         resident_impact_.health_penalty += std::max<std::int64_t>(1, food_missing);
@@ -109,7 +123,7 @@ void EconomySimulation::consume(std::int64_t seconds, std::int64_t timestamp) {
         resident_impact_.thirst_seconds += seconds;
         resident_impact_.contamination += std::max<std::int64_t>(1, water_missing);
     }
-    if (power_missing > 0) rebalance_power();
+    if (power_missing > 0 || power_.amount == 0) rebalance_power();
 }
 
 void EconomySimulation::advance_rooms(std::int64_t seconds) {
@@ -126,7 +140,9 @@ void EconomySimulation::advance_rooms(std::int64_t seconds) {
 
 void EconomySimulation::rebalance_power() {
     std::vector<ProductionRoom*> powered;
-    for (auto& room : rooms_) if (room.requires_power) powered.push_back(&room);
+    for (auto& room : rooms_) {
+        if (room.requires_power) powered.push_back(&room);
+    }
     std::sort(powered.begin(), powered.end(), [](const auto* left, const auto* right) {
         if (left->power_priority != right->power_priority)
             return left->power_priority > right->power_priority;
@@ -148,15 +164,21 @@ void EconomySimulation::advance(std::int64_t seconds, std::int64_t start_timesta
     }
 }
 
-ResourcePool EconomySimulation::pool(ResourceKind kind) const noexcept { return const_pool(kind); }
+ResourcePool EconomySimulation::pool(ResourceKind kind) const noexcept {
+    return const_pool(kind);
+}
+
 const std::vector<ProductionRoom>& EconomySimulation::rooms() const noexcept { return rooms_; }
 const std::vector<EconomyEntry>& EconomySimulation::journal() const noexcept { return journal_; }
-const ResidentImpact& EconomySimulation::resident_impact() const noexcept { return resident_impact_; }
+const ResidentImpact& EconomySimulation::resident_impact() const noexcept {
+    return resident_impact_;
+}
 
 std::int64_t EconomySimulation::production_rate_per_hour(ResourceKind kind) const noexcept {
     std::int64_t rate = 0;
     for (const auto& room : rooms_) {
-        if (room.output != kind || !room.enabled || room.workers == 0 || room.cycle_seconds <= 0) continue;
+        if (room.output != kind || !room.enabled || room.workers == 0 || room.cycle_seconds <= 0)
+            continue;
         rate = safe_add(rate, room.units_per_cycle * room.workers * 3600 / room.cycle_seconds);
     }
     return rate;
@@ -164,9 +186,12 @@ std::int64_t EconomySimulation::production_rate_per_hour(ResourceKind kind) cons
 
 EconomyForecast EconomySimulation::forecast() const noexcept {
     EconomyForecast value;
-    value.net_power_per_hour = production_rate_per_hour(ResourceKind::Power) - config_.power_use_per_hour;
-    value.net_food_per_hour = production_rate_per_hour(ResourceKind::Food) - config_.food_use_per_hour;
-    value.net_water_per_hour = production_rate_per_hour(ResourceKind::Water) - config_.water_use_per_hour;
+    value.net_power_per_hour = production_rate_per_hour(ResourceKind::Power) -
+                               config_.power_use_per_hour;
+    value.net_food_per_hour = production_rate_per_hour(ResourceKind::Food) -
+                              config_.food_use_per_hour;
+    value.net_water_per_hour = production_rate_per_hour(ResourceKind::Water) -
+                               config_.water_use_per_hour;
     auto consider = [&](ResourceKind kind, const ResourcePool& pool, std::int64_t net) {
         if (net >= 0) return;
         const auto seconds = pool.amount * 3600 / -net;
