@@ -2,9 +2,7 @@
 #include <citro2d.h>
 
 #include <algorithm>
-#include <array>
 #include <cstdio>
-#include <cstring>
 
 #include "render/ShelterCamera.hpp"
 #include "ui/UiFramework.hpp"
@@ -78,10 +76,6 @@ void build_room(DemoState& state) {
 }
 
 void assign_resident(DemoState& state) {
-    if (state.rooms <= 0) {
-        set_message(state, "Najpierw zbuduj pokoj.");
-        return;
-    }
     state.resident_assigned = !state.resident_assigned;
     state.workers = state.resident_assigned ? 1 : 0;
     set_message(state, state.resident_assigned
@@ -105,19 +99,13 @@ void collect(DemoState& state) {
 
 void update_simulation(DemoState& state) {
     if (!state.resident_assigned) return;
-    ++state.production_ticks;
-    if (state.production_ticks >= 120) {
+    if (++state.production_ticks >= 120) {
         state.production_ticks = 0;
         state.stored = std::min(30, state.stored + 5);
     }
 }
 
-void draw_text(C2D_TextBuf buffer,
-               const char* value,
-               float x,
-               float y,
-               float scale,
-               u32 color) {
+void draw_text(C2D_TextBuf buffer, const char* value, float x, float y, float scale, u32 color) {
     C2D_Text text;
     C2D_TextParse(&text, buffer, value);
     C2D_TextOptimize(&text);
@@ -125,10 +113,10 @@ void draw_text(C2D_TextBuf buffer,
 }
 
 void draw_shelter(C3D_RenderTarget* target,
-                   const ShelterCamera& camera,
-                   float eye_offset,
-                   const DemoState& state,
-                   RenderStats& stats) {
+                  const ShelterCamera& camera,
+                  float eye_offset,
+                  const DemoState& state,
+                  RenderStats& stats) {
     C2D_TargetClear(target, C2D_Color32(10, 18, 28, 255));
     C2D_SceneBegin(target);
 
@@ -159,25 +147,22 @@ void draw_shelter(C3D_RenderTarget* target,
             ++stats.draw_calls;
             ++stats.visible_cells;
 
-            if (room) {
-                const float fill = room_index == state.selected_room
-                                       ? static_cast<float>(state.stored) / 30.0f
-                                       : 0.0f;
-                C2D_DrawRectSolid(screen_x + 4.0f,
-                                  screen_y + height - 8.0f,
-                                  0.1f,
-                                  std::max(0.0f, (width - 8.0f) * fill),
-                                  4.0f,
-                                  C2D_Color32(99, 205, 135, 255));
-                if (state.resident_assigned && room_index == state.selected_room) {
-                    const float size = std::max(4.0f, 9.0f * zoom);
-                    C2D_DrawRectSolid(screen_x + width * 0.5f - size * 0.5f,
-                                      screen_y + height - size - 10.0f,
-                                      0.2f,
-                                      size,
-                                      size,
-                                      C2D_Color32(235, 226, 178, 255));
-                }
+            if (!room) continue;
+            const float fill = selected ? static_cast<float>(state.stored) / 30.0f : 0.0f;
+            C2D_DrawRectSolid(screen_x + 4.0f,
+                              screen_y + height - 8.0f,
+                              0.1f,
+                              std::max(0.0f, (width - 8.0f) * fill),
+                              4.0f,
+                              C2D_Color32(99, 205, 135, 255));
+            if (state.resident_assigned && selected) {
+                const float size = std::max(4.0f, 9.0f * zoom);
+                C2D_DrawRectSolid(screen_x + width * 0.5f - size * 0.5f,
+                                  screen_y + height - size - 10.0f,
+                                  0.2f,
+                                  size,
+                                  size,
+                                  C2D_Color32(235, 226, 178, 255));
             }
         }
     }
@@ -245,7 +230,6 @@ InputFrame read_ui_input(u32 down, u32 held, u32 up) {
     input.left = (down & KEY_DLEFT) != 0;
     input.right = (down & KEY_DRIGHT) != 0;
     input.confirm = (down & KEY_A) != 0;
-    input.cancel = false;
     input.touch_pressed = (down & KEY_TOUCH) != 0;
     input.touch_held = (held & KEY_TOUCH) != 0 && !input.touch_pressed;
     input.touch_released = (up & KEY_TOUCH) != 0;
@@ -264,9 +248,14 @@ int main() {
     gfxInitDefault();
     gfxSet3D(true);
 
-    if (!C2D_Init(C2D_DEFAULT_MAX_OBJECTS)) {
+    if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) {
         gfxExit();
         return 1;
+    }
+    if (!C2D_Init(C2D_DEFAULT_MAX_OBJECTS)) {
+        C3D_Fini();
+        gfxExit();
+        return 2;
     }
 
     C2D_Prepare();
@@ -277,8 +266,9 @@ int main() {
     if (top_left == nullptr || top_right == nullptr || bottom == nullptr || text_buffer == nullptr) {
         if (text_buffer != nullptr) C2D_TextBufDelete(text_buffer);
         C2D_Fini();
+        C3D_Fini();
         gfxExit();
-        return 2;
+        return 3;
     }
 
     ShelterCamera camera({kColumns * kCellWidth, kRows * kCellHeight}, {400.0f, 240.0f});
@@ -317,12 +307,11 @@ int main() {
             set_message(state, save_demo(state) ? "Zapisano demo na karcie SD."
                                                 : "Nie udalo sie zapisac gry.");
         }
-        if (down & KEY_SELECT) {
-            if (!load_demo(state)) set_message(state, "Brak poprawnego zapisu demo.");
+        if ((down & KEY_SELECT) && !load_demo(state)) {
+            set_message(state, "Brak poprawnego zapisu demo.");
         }
         if (down & KEY_DLEFT) state.selected_room = std::max(0, state.selected_room - 1);
-        if (down & KEY_DRIGHT)
-            state.selected_room = std::min(state.rooms - 1, state.selected_room + 1);
+        if (down & KEY_DRIGHT) state.selected_room = std::min(state.rooms - 1, state.selected_room + 1);
 
         const auto action = ui.route(read_ui_input(down, held, up));
         if (action && action->type == UiActionType::Activate) {
@@ -351,6 +340,7 @@ int main() {
 
     C2D_TextBufDelete(text_buffer);
     C2D_Fini();
+    C3D_Fini();
     gfxExit();
     return 0;
 }
