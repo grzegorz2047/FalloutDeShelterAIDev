@@ -1,0 +1,22 @@
+name: Policy checks
+
+on:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  asset-policy:
+    name: Asset provenance policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate asset manifest and denylist
+        run: python3 scripts/check_asset_policy.py
+      - name: Compile validator
+        run: python3 -m py_compile scripts/check_asset_policy.py
