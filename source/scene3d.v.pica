@@ -4,7 +4,8 @@
 .fvec projection[4], modelView[4]
 
 ; Constants
-.constf constants(0.0, 1.0, 0.0, 0.0)
+.constf constants(0.0, 1.0, 0.55, 0.45)
+.constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
 .alias ones constants.yyyy
 
 ; Outputs
@@ -15,7 +16,8 @@
 ; Inputs
 .alias inpos v0
 .alias intex v1
-.alias inclr v2
+.alias innormal v2
+.alias inclr v3
 
 .proc main
     ; Homogeneous world position
@@ -34,8 +36,17 @@
     dp4 outpos.z, projection[2], r1
     dp4 outpos.w, projection[3], r1
 
-    ; Generated material atlas coordinates and vertex tint
+    ; Cheap fixed directional lighting: ambient + max(dot(N, L), 0) * diffuse.
+    mov r3, lightDirection
+    mov r4, constants
+    dp3 r2.x, innormal, r3
+    max r2.x, r2.x, r4.x
+    mul r2.x, r2.x, r4.w
+    add r2.x, r2.x, r4.z
+
+    ; Generated material atlas coordinates and lit vertex tint.
     mov outtc0, intex
-    mov outclr, inclr
+    mul outclr.xyz, inclr, r2.x
+    mov outclr.w, inclr.w
     end
 .end

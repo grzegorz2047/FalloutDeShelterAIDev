@@ -14,15 +14,25 @@ struct Position3D {
     float z;
 };
 
+struct Normal3D {
+    float x;
+    float y;
+    float z;
+};
+
 Vertex3D make_vertex(const Position3D& position,
                      float u,
                      float v,
+                     const Normal3D& normal,
                      std::uint32_t color) noexcept {
     return {position.x,
             position.y,
             position.z,
             u,
             v,
+            normal.x,
+            normal.y,
+            normal.z,
             static_cast<float>(color & 0xffu) * kByteToUnit,
             static_cast<float>((color >> 8) & 0xffu) * kByteToUnit,
             static_cast<float>((color >> 16) & 0xffu) * kByteToUnit,
@@ -34,15 +44,16 @@ void write_face(Vertex3D* out,
                 const Position3D& top_right,
                 const Position3D& bottom_right,
                 const Position3D& bottom_left,
+                const Normal3D& normal,
                 float u0,
                 float u1,
                 std::uint32_t color) noexcept {
     constexpr float v0 = kUvInset;
     constexpr float v1 = 1.0f - kUvInset;
-    const Vertex3D a = make_vertex(top_left, u0, v0, color);
-    const Vertex3D b = make_vertex(top_right, u1, v0, color);
-    const Vertex3D c = make_vertex(bottom_right, u1, v1, color);
-    const Vertex3D d = make_vertex(bottom_left, u0, v1, color);
+    const Vertex3D a = make_vertex(top_left, u0, v0, normal, color);
+    const Vertex3D b = make_vertex(top_right, u1, v0, normal, color);
+    const Vertex3D c = make_vertex(bottom_right, u1, v1, normal, color);
+    const Vertex3D d = make_vertex(bottom_left, u0, v1, normal, color);
     out[0] = a;
     out[1] = b;
     out[2] = c;
@@ -88,13 +99,20 @@ bool SceneMesh3D::append_box(const Box3D& box) noexcept {
     const Position3D p110{x1, y1, z0};
     const Position3D p111{x1, y1, z1};
 
+    constexpr Normal3D front{0.0f, 0.0f, 1.0f};
+    constexpr Normal3D back{0.0f, 0.0f, -1.0f};
+    constexpr Normal3D left{-1.0f, 0.0f, 0.0f};
+    constexpr Normal3D right{1.0f, 0.0f, 0.0f};
+    constexpr Normal3D bottom{0.0f, 1.0f, 0.0f};
+    constexpr Normal3D top{0.0f, -1.0f, 0.0f};
+
     Vertex3D* out = vertices_.data() + vertex_count_;
-    write_face(out + 0, p001, p101, p111, p011, u0, u1, color);
-    write_face(out + 6, p100, p000, p010, p110, u0, u1, color);
-    write_face(out + 12, p000, p001, p011, p010, u0, u1, color);
-    write_face(out + 18, p101, p100, p110, p111, u0, u1, color);
-    write_face(out + 24, p010, p011, p111, p110, u0, u1, color);
-    write_face(out + 30, p000, p100, p101, p001, u0, u1, color);
+    write_face(out + 0, p001, p101, p111, p011, front, u0, u1, color);
+    write_face(out + 6, p100, p000, p010, p110, back, u0, u1, color);
+    write_face(out + 12, p000, p001, p011, p010, left, u0, u1, color);
+    write_face(out + 18, p101, p100, p110, p111, right, u0, u1, color);
+    write_face(out + 24, p010, p011, p111, p110, bottom, u0, u1, color);
+    write_face(out + 30, p000, p100, p101, p001, top, u0, u1, color);
 
     vertex_count_ += kVerticesPerBox;
     ++box_count_;
