@@ -1,0 +1,34 @@
+name: Run game design pass
+
+on:
+  push:
+    branches:
+      - agent/large-dense-rooms
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/large-dense-rooms
+      - name: Execute reviewed pass
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/apply-game-design-pass.yml').read_text().splitlines()
+          marker = next(i for i, line in enumerate(source) if line.strip() == 'run: |')
+          body = []
+          for line in source[marker + 1:]:
+              if line.startswith('          '):
+                  body.append(line[10:])
+              elif line.strip():
+                  break
+          Path('/tmp/apply-game-design-pass.sh').write_text('\n'.join(body) + '\n')
+          PY
+          bash /tmp/apply-game-design-pass.sh
