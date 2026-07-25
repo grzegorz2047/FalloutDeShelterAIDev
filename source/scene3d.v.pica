@@ -40,7 +40,8 @@
     dp4 outpos.w, projection[3], r1
 
     ; Cheap fixed directional lighting: ambient + max(dot(N, L), 0) * diffuse.
-    dp3 r2.x, innormal, lightDirection
+    mov r3, lightDirection
+    dp3 r2.x, innormal, r3
     max r2.x, r2.x, zero
     mul r2.x, r2.x, diffuse
     add r2.x, r2.x, ambient
