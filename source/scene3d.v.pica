@@ -6,10 +6,7 @@
 ; Constants
 .constf constants(0.0, 1.0, 0.42, 0.58)
 .constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
-.alias zero constants.xxxx
 .alias ones constants.yyyy
-.alias ambient constants.zzzz
-.alias diffuse constants.wwww
 
 ; Outputs
 .out outpos position
@@ -41,10 +38,11 @@
 
     ; Cheap fixed directional lighting: ambient + max(dot(N, L), 0) * diffuse.
     mov r3, lightDirection
+    mov r4, constants
     dp3 r2.x, innormal, r3
-    max r2.x, r2.x, zero
-    mul r2.x, r2.x, diffuse
-    add r2.x, r2.x, ambient
+    max r2.x, r2.x, r4.x
+    mul r2.x, r2.x, r4.w
+    add r2.x, r2.x, r4.z
 
     ; Generated material atlas coordinates and lit vertex tint.
     mov outtc0, intex
