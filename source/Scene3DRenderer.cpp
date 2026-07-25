@@ -12,6 +12,7 @@ constexpr int kColumns = 12;
 constexpr int kRows = 7;
 constexpr float kCellWidth = 72.0f;
 constexpr float kCellHeight = 52.0f;
+constexpr bool kForceDiagnosticFallback = true;
 
 constexpr u32 rgba(u8 r, u8 g, u8 b, u8 a = 255) noexcept {
     return static_cast<u32>(r) | (static_cast<u32>(g) << 8) |
@@ -37,6 +38,7 @@ Scene3DRenderer::~Scene3DRenderer() {
 
 bool Scene3DRenderer::initialize() noexcept {
     if (initialized_) return true;
+    if (kForceDiagnosticFallback) return false;
 
     shutdown();
 
