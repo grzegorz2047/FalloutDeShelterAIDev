@@ -189,7 +189,7 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     C3D_AttrInfo* attr_info = C3D_GetAttrInfo();
     AttrInfo_Init(attr_info);
     AttrInfo_AddLoader(attr_info, 0, GPU_FLOAT, 3);
-    AttrInfo_AddLoader(attr_info, 1, GPU_UNSIGNED_BYTE, 4);
+    AttrInfo_AddLoader(attr_info, 1, GPU_FLOAT, 4);
 
     C3D_BufInfo* buf_info = C3D_GetBufInfo();
     BufInfo_Init(buf_info);
