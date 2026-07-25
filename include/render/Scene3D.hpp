@@ -44,7 +44,11 @@ struct FixedSideCamera {
 
 class SceneMesh3D {
 public:
-    static constexpr std::size_t kMaxVertices = 4096;
+    // Richer room silhouettes and dedicated foreground/glow passes are allowed
+    // to use twice the previous geometry budget. The renderer still owns a
+    // fixed-capacity mesh, but visual quality now takes priority over the old
+    // 4096-vertex constraint.
+    static constexpr std::size_t kMaxVertices = 8192;
 
     void clear() noexcept;
     bool append_box(const Box3D& box) noexcept;
