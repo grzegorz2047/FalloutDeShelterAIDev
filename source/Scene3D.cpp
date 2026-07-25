@@ -7,7 +7,9 @@ constexpr std::size_t kVerticesPerBox = 36;
 constexpr float kByteToUnit = 1.0f / 255.0f;
 constexpr float kMaterialWidth =
     1.0f / static_cast<float>(assets::kGeneratedMaterialTileCount);
-constexpr float kUvInset = 0.002f;
+// Keep bilinear samples inside a material tile. At 16 pixels per tile this
+// inset is a little over one texture-pixel in atlas UV space.
+constexpr float kUvInset = 0.0045f;
 
 struct Position3D { float x; float y; float z; };
 struct Normal3D { float x; float y; float z; };
