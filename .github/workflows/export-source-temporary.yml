@@ -1,0 +1,25 @@
+name: Export exact PR source
+
+on:
+  push:
+    branches:
+      - agent/large-dense-rooms
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package exact checkout
+        shell: bash
+        run: git archive --format=zip --output=FalloutDeShelterAIDev-source.zip HEAD
+      - name: Upload exact checkout
+        uses: actions/upload-artifact@v4
+        with:
+          name: FalloutDeShelterAIDev-source
+          path: FalloutDeShelterAIDev-source.zip
+          if-no-files-found: error
+          retention-days: 1
