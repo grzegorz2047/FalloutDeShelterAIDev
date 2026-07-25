@@ -140,6 +140,7 @@ void draw_bottom(C3D_RenderTarget* bottom,
                  C2D_TextBuf buffer,
                  const DemoState& state,
                  const UiTree& ui) {
+    C2D_Prepare();
     C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
     C2D_SceneBegin(bottom);
 
