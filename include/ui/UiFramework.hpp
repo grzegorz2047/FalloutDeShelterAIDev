@@ -68,6 +68,7 @@ public:
     bool focus(int id) noexcept;
 
     [[nodiscard]] std::optional<int> focused_id() const noexcept;
+    [[nodiscard]] std::optional<int> pressed_id() const noexcept;
     [[nodiscard]] std::optional<Control> control(int id) const;
     [[nodiscard]] std::optional<UiAction> route(const InputFrame& input);
 
