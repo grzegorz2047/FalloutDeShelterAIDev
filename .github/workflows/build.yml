@@ -43,7 +43,26 @@ jobs:
           sha256sum -c SHA256SUMS.txt
       - name: Package exact source checkout
         shell: bash
-        run: git archive --format=zip --output=FalloutDeShelterAIDev-source.zip HEAD
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          root = Path('.')
+          output = root / 'FalloutDeShelterAIDev-source.zip'
+          excluded_roots = {'.git', 'build', 'dist'}
+          with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
+              for path in sorted(root.rglob('*')):
+                  if not path.is_file():
+                      continue
+                  relative = path.relative_to(root)
+                  if relative.parts and relative.parts[0] in excluded_roots:
+                      continue
+                  if relative == output.name:
+                      continue
+                  archive.write(path, relative.as_posix())
+          PY
+          test -s FalloutDeShelterAIDev-source.zip
       - name: Upload source checkout
         uses: actions/upload-artifact@v4
         with:
