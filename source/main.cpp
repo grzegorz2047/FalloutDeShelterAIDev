@@ -2,11 +2,9 @@
 #include <citro2d.h>
 
 #include <algorithm>
-#include <array>
 #include <cstdio>
-#include <cstring>
 
-#include "render/RoomVisuals.hpp"
+#include "render/Scene3DRenderer.hpp"
 #include "render/ShelterCamera.hpp"
 #include "ui/UiFramework.hpp"
 
@@ -33,11 +31,9 @@ struct DemoState {
 };
 
 using deep_shelter::render::RenderStats;
-using deep_shelter::render::RoomVisual;
+using deep_shelter::render::Scene3DRenderer;
 using deep_shelter::render::ShelterCamera;
-using deep_shelter::render::draw_excavated_cell;
-using deep_shelter::render::draw_rock_cell;
-using deep_shelter::render::draw_room_cutaway;
+using deep_shelter::render::ShelterSceneState3D;
 using deep_shelter::ui::InputFrame;
 using deep_shelter::ui::UiActionType;
 using deep_shelter::ui::UiTree;
@@ -83,10 +79,6 @@ void build_room(DemoState& state) {
 }
 
 void assign_resident(DemoState& state) {
-    if (state.rooms <= 0) {
-        set_message(state, "Najpierw zbuduj pokoj.");
-        return;
-    }
     state.resident_assigned = !state.resident_assigned;
     state.workers = state.resident_assigned ? 1 : 0;
     set_message(state, state.resident_assigned
@@ -129,70 +121,6 @@ void draw_text(C2D_TextBuf buffer,
     C2D_DrawText(&text, C2D_WithColor, x, y, 0.5f, scale, scale, color);
 }
 
-void draw_shelter(C3D_RenderTarget* target,
-                  const ShelterCamera& camera,
-                  float eye_offset,
-                  const DemoState& state,
-                  RenderStats& stats) {
-    C2D_TargetClear(target, C2D_Color32(8, 14, 22, 255));
-    C2D_SceneBegin(target);
-
-    const float zoom = camera.zoom();
-    for (int row = 0; row < kRows; ++row) {
-        for (int column = 0; column < kColumns; ++column) {
-            const float world_x = static_cast<float>(column) * kCellWidth;
-            const float world_y = static_cast<float>(row) * kCellHeight;
-            if (!camera.visible(world_x, world_y, kCellWidth, kCellHeight)) {
-                ++stats.culled_cells;
-                continue;
-            }
-
-            const float screen_x = (world_x - camera.x()) * zoom;
-            const float screen_y = (world_y - camera.y()) * zoom;
-            const float width = kCellWidth * zoom - 2.0f;
-            const float height = kCellHeight * zoom - 2.0f;
-            const bool excavated = row >= 2 && column >= 1 && column <= 10;
-            const int room_index = column - 2;
-            const bool room = row == 4 && room_index >= 0 && room_index < state.rooms;
-            ++stats.visible_cells;
-
-            if (room) {
-                const bool selected = room_index == state.selected_room;
-                draw_room_cutaway({screen_x,
-                                   screen_y,
-                                   width,
-                                   height,
-                                   zoom,
-                                   eye_offset,
-                                   selected ? static_cast<float>(state.stored) / 30.0f : 0.0f,
-                                   room_index,
-                                   selected,
-                                   state.resident_assigned && selected},
-                                  stats);
-            } else if (excavated) {
-                draw_excavated_cell(screen_x,
-                                    screen_y,
-                                    width,
-                                    height,
-                                    eye_offset,
-                                    column,
-                                    row,
-                                    stats);
-            } else {
-                draw_rock_cell(screen_x,
-                               screen_y,
-                               width,
-                               height,
-                               eye_offset,
-                               column,
-                               row,
-                               stats);
-            }
-        }
-    }
-    stats.estimated_linear_memory = stats.visible_cells * sizeof(float) * 12;
-}
-
 void draw_button(C2D_TextBuf buffer,
                  float x,
                  int id,
@@ -222,7 +150,7 @@ void draw_bottom(C3D_RenderTarget* bottom,
                   state.power,
                   state.food,
                   state.water);
-    draw_text(buffer, "DEEP SHELTER 3D - GRYWALNE DEMO", 12.0f, 10.0f, 0.52f,
+    draw_text(buffer, "DEEP SHELTER 3D - PRAWDZIWE 2.5D", 12.0f, 10.0f, 0.50f,
               C2D_Color32(246, 211, 111, 255));
     draw_text(buffer, status, 12.0f, 34.0f, 0.43f, C2D_Color32(230, 238, 240, 255));
 
@@ -236,7 +164,7 @@ void draw_bottom(C3D_RenderTarget* bottom,
     draw_text(buffer, room, 12.0f, 56.0f, 0.43f, C2D_Color32(159, 222, 184, 255));
     draw_text(buffer, state.message, 12.0f, 84.0f, 0.39f, C2D_Color32(255, 255, 255, 255));
     draw_text(buffer,
-              "A: buduj  X: przydziel  Y: odbierz  B: zapisz  SELECT: wczytaj",
+              "Circle Pad: przesun  L/R: zoom  Suwak 3D: stereoskopia",
               12.0f,
               118.0f,
               0.34f,
@@ -288,7 +216,9 @@ int main() {
     C3D_RenderTarget* top_right = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
     C3D_RenderTarget* bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
     C2D_TextBuf text_buffer = C2D_TextBufNew(4096);
-    if (top_left == nullptr || top_right == nullptr || bottom == nullptr || text_buffer == nullptr) {
+    Scene3DRenderer scene_renderer;
+    if (top_left == nullptr || top_right == nullptr || bottom == nullptr ||
+        text_buffer == nullptr || !scene_renderer.initialize()) {
         if (text_buffer != nullptr) C2D_TextBufDelete(text_buffer);
         C2D_Fini();
         C3D_Fini();
@@ -352,18 +282,23 @@ int main() {
             set_message(state, action->message.c_str());
         }
 
-        const float parallax = osGet3DSliderState() * 3.0f;
+        const float stereo = osGet3DSliderState() * 0.035f;
+        const ShelterSceneState3D scene_state{state.rooms,
+                                               state.selected_room,
+                                               state.stored,
+                                               state.resident_assigned};
         RenderStats left_stats{};
         RenderStats right_stats{};
         C2D_TextBufClear(text_buffer);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        draw_shelter(top_left, camera, -parallax, state, left_stats);
-        draw_shelter(top_right, camera, parallax, state, right_stats);
+        scene_renderer.draw(top_left, camera, -stereo, scene_state, left_stats);
+        scene_renderer.draw(top_right, camera, stereo, scene_state, right_stats);
         draw_bottom(bottom, text_buffer, state, ui);
         C3D_FrameEnd(0);
     }
 
+    scene_renderer.shutdown();
     C2D_TextBufDelete(text_buffer);
     C2D_Fini();
     C3D_Fini();
