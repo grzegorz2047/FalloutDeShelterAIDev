@@ -12,6 +12,7 @@ constexpr int kColumns = 12;
 constexpr int kRows = 7;
 constexpr float kCellWidth = 72.0f;
 constexpr float kCellHeight = 52.0f;
+constexpr u32 kRendererDiagnosticColor = 0x9A2020FF;
 
 constexpr u32 rgba(u8 r, u8 g, u8 b, u8 a = 255) noexcept {
     return static_cast<u32>(r) | (static_cast<u32>(g) << 8) |
@@ -40,7 +41,9 @@ bool Scene3DRenderer::initialize() noexcept {
 
     shader_dvlb_ = DVLB_ParseFile(reinterpret_cast<u32*>(scene3d_v_shbin),
                                   scene3d_v_shbin_size);
-    if (shader_dvlb_ == nullptr) return false;
+    if (shader_dvlb_ == nullptr) {
+        return true;
+    }
 
     shaderProgramInit(&program_);
     shaderProgramSetVsh(&program_, &shader_dvlb_->DVLE[0]);
@@ -48,14 +51,14 @@ bool Scene3DRenderer::initialize() noexcept {
     model_view_uniform_ = shaderInstanceGetUniformLocation(program_.vertexShader, "modelView");
     if (projection_uniform_ < 0 || model_view_uniform_ < 0) {
         shutdown();
-        return false;
+        return true;
     }
 
     vertex_buffer_ = static_cast<Vertex3D*>(
         linearAlloc(sizeof(Vertex3D) * SceneMesh3D::kMaxVertices));
     if (vertex_buffer_ == nullptr) {
         shutdown();
-        return false;
+        return true;
     }
 
     initialized_ = true;
@@ -88,7 +91,6 @@ void Scene3DRenderer::append_room(float x,
     const u32 dark = rgba(31, 39, 43);
     const u32 accent = room_accent(room_index);
 
-    // Open-front room shell. Back wall, floor, ceiling and side columns all have real depth.
     mesh_.append_box({x + 3.0f, y + 3.0f, -18.0f, 66.0f, 46.0f, 4.0f, steel});
     mesh_.append_box({x, y, -14.0f, 72.0f, 4.0f, 18.0f, frame});
     mesh_.append_box({x, y + 48.0f, -14.0f, 72.0f, 4.0f, 18.0f, frame});
@@ -96,7 +98,6 @@ void Scene3DRenderer::append_room(float x,
     mesh_.append_box({x + 68.0f, y, -14.0f, 4.0f, 52.0f, 18.0f, frame});
     mesh_.append_box({x + 4.0f, y + 43.0f, -10.0f, 64.0f, 5.0f, 14.0f, dark});
 
-    // Equipment is deliberately placed in front of the rear wall but behind the open facade.
     mesh_.append_box({x + 10.0f, y + 25.0f, -9.0f, 14.0f, 18.0f, 10.0f, accent});
     mesh_.append_box({x + 29.0f, y + 18.0f, -8.0f, 15.0f, 25.0f, 9.0f, accent});
     mesh_.append_box({x + 50.0f, y + 29.0f, -7.0f, 11.0f, 14.0f, 8.0f, accent});
@@ -164,7 +165,13 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
                            float stereo_eye,
                            const ShelterSceneState3D& state,
                            RenderStats& stats) noexcept {
-    if (!initialized_ || target == nullptr) return;
+    if (target == nullptr) return;
+
+    if (!initialized_) {
+        C3D_RenderTargetClear(target, C3D_CLEAR_COLOR, kRendererDiagnosticColor, 0);
+        C3D_FrameDrawOn(target);
+        return;
+    }
 
     build_scene(camera, state, stats);
     if (mesh_.vertex_count() == 0) return;
@@ -184,6 +191,11 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     C3D_BufInfo* buf_info = C3D_GetBufInfo();
     BufInfo_Init(buf_info);
     BufInfo_Add(buf_info, vertex_buffer_, sizeof(Vertex3D), 2, 0x10);
+
+    C3D_TexEnv* env = C3D_GetTexEnv(0);
+    C3D_TexEnvInit(env);
+    C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR);
+    C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
 
     const float zoom = camera.zoom();
     const float center_x = camera.x() + 200.0f / zoom;
