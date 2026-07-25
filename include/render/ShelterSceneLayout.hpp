@@ -27,33 +27,33 @@ constexpr std::array<float, 6> kRoomY{{22.0f, 22.0f,
                                         90.0f, 90.0f,
                                         158.0f, 158.0f}};
 
-// The current 20-degree perspective and 900-unit camera distance map roughly
-// 0.535 screen pixels per post-framing world unit on the 400x240 upper screen.
-// Keep this estimate centralized so host tests guard the intended room scale.
 constexpr float kEstimatedPixelsPerFramedUnit = 0.535f;
 constexpr float kEstimatedRoomPixelWidth =
     kRoomWidth * kFramingScale * kEstimatedPixelsPerFramedUnit;
 constexpr float kEstimatedRoomPixelHeight =
     kRoomHeight * kFramingScale * kEstimatedPixelsPerFramedUnit;
 
-// Scene3D emits one six-face box as 36 vertices. Keep the visual-density
-// contract explicit so future prop work cannot silently overflow the fixed VBO.
+// Visual quality now takes priority over the previous 4096-vertex target.
+// The richer renderer may use separate structure, prop and glow passes.
 constexpr std::size_t kVerticesPerBox = 36;
-constexpr std::size_t kMaxSceneVertices = 4096;
+constexpr std::size_t kMaxSceneVertices = 8192;
 constexpr std::size_t kMaxSceneBoxes = kMaxSceneVertices / kVerticesPerBox;
 constexpr std::size_t kStaticSceneBoxes = 22;
-constexpr std::size_t kActiveRoomBaseBoxes = 6;
-constexpr std::size_t kMaxRoomSignatureBoxes = 6;
+constexpr std::size_t kActiveRoomBaseBoxes = 7;
+constexpr std::size_t kMaxRoomSignatureBoxes = 14;
 constexpr std::size_t kUnbuiltRoomBoxes = 8;
 constexpr std::size_t kSelectionBoxes = 8;
 constexpr std::size_t kResidentBoxes = 2;
 constexpr std::size_t kResourceFillBoxes = 1;
+constexpr std::size_t kGlowBoxesPerActiveRoom = 2;
 constexpr std::size_t kWorstCaseSceneBoxes =
     kStaticSceneBoxes +
-    kRoomX.size() * (kActiveRoomBaseBoxes + kMaxRoomSignatureBoxes) +
+    kRoomX.size() * (kActiveRoomBaseBoxes + kMaxRoomSignatureBoxes +
+                     kGlowBoxesPerActiveRoom) +
     kSelectionBoxes + kResidentBoxes + kResourceFillBoxes;
 constexpr std::size_t kWorstCaseSceneVertices =
     kWorstCaseSceneBoxes * kVerticesPerBox;
+constexpr std::size_t kTargetRenderPasses = 3;
 
 [[nodiscard]] constexpr bool overlaps(float ax,
                                       float ay,
