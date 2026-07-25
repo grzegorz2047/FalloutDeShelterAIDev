@@ -15,6 +15,7 @@ constexpr int kRows = 7;
 constexpr float kCellWidth = 72.0f;
 constexpr float kCellHeight = 52.0f;
 constexpr const char* kSavePath = "sdmc:/DeepShelter3D_demo.sav";
+constexpr u32 kRendererDiagnosticColor = 0x9A2020FF;
 
 struct DemoState {
     int credits = 500;
@@ -216,15 +217,16 @@ int main() {
     C3D_RenderTarget* top_right = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
     C3D_RenderTarget* bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
     C2D_TextBuf text_buffer = C2D_TextBufNew(4096);
-    Scene3DRenderer scene_renderer;
-    if (top_left == nullptr || top_right == nullptr || bottom == nullptr ||
-        text_buffer == nullptr || !scene_renderer.initialize()) {
+    if (top_left == nullptr || top_right == nullptr || bottom == nullptr || text_buffer == nullptr) {
         if (text_buffer != nullptr) C2D_TextBufDelete(text_buffer);
         C2D_Fini();
         C3D_Fini();
         gfxExit();
         return 3;
     }
+
+    Scene3DRenderer scene_renderer;
+    const bool renderer_ready = scene_renderer.initialize();
 
     ShelterCamera camera({kColumns * kCellWidth, kRows * kCellHeight}, {400.0f, 240.0f});
     UiTree ui;
@@ -235,6 +237,10 @@ int main() {
     ui.add({4, {240, 160, 66, 34}, true, true, true, {}, {}});
 
     DemoState state;
+    if (!renderer_ready) {
+        set_message(state, "Blad renderera 3D. Uruchomiono bezpieczny tryb diagnostyczny.");
+    }
+
     while (aptMainLoop()) {
         hidScanInput();
         const u32 down = hidKeysDown();
@@ -292,8 +298,15 @@ int main() {
         C2D_TextBufClear(text_buffer);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        scene_renderer.draw(top_left, camera, -stereo, scene_state, left_stats);
-        scene_renderer.draw(top_right, camera, stereo, scene_state, right_stats);
+        if (renderer_ready) {
+            scene_renderer.draw(top_left, camera, -stereo, scene_state, left_stats);
+            scene_renderer.draw(top_right, camera, stereo, scene_state, right_stats);
+        } else {
+            C3D_RenderTargetClear(top_left, C3D_CLEAR_COLOR, kRendererDiagnosticColor, 0);
+            C3D_FrameDrawOn(top_left);
+            C3D_RenderTargetClear(top_right, C3D_CLEAR_COLOR, kRendererDiagnosticColor, 0);
+            C3D_FrameDrawOn(top_right);
+        }
         draw_bottom(bottom, text_buffer, state, ui);
         C3D_FrameEnd(0);
     }
