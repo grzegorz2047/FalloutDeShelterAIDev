@@ -36,7 +36,7 @@ public:
     static constexpr std::size_t kMaxVertices = 4096;
 
     void clear() noexcept;
-    [[nodiscard]] bool append_box(const Box3D& box) noexcept;
+    bool append_box(const Box3D& box) noexcept;
 
     [[nodiscard]] const Vertex3D* data() const noexcept { return vertices_.data(); }
     [[nodiscard]] std::size_t vertex_count() const noexcept { return vertex_count_; }
