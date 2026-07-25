@@ -15,15 +15,21 @@ The top screen uses Citro3D geometry rather than Citro2D room primitives. The sh
 
 - One box: 12 triangles / 36 vertices.
 - Absolute fixed-capacity maximum: 113 complete boxes (4068 vertices).
-- Vertex format: XYZ position, UV coordinates and normalized RGBA tint: nine 32-bit floats / 36 bytes.
-- Maximum CPU mesh storage: 147,456 bytes.
-- Maximum linear-memory VBO: 147,456 bytes.
+- Vertex format: XYZ position, UV coordinates, XYZ unit normal and normalized RGBA tint: twelve 32-bit floats / 48 bytes.
+- Maximum CPU mesh storage: 196,608 bytes.
+- Maximum linear-memory VBO: 196,608 bytes.
 - Generated material texture: 64×16 RGB565 / 2,048 bytes.
 - Compressed source atlas: 512 bytes of 4 bpp indices plus a 32-byte RGB565 palette.
-- Total fixed renderer data is approximately 290 KiB, excluding Citro3D target buffers.
+- Total fixed renderer data is approximately 386 KiB, excluding Citro3D target buffers.
 - Overflow is detected by `SceneMesh3D::overflowed()` instead of writing past the buffer.
 
 The current reference scene is camera-culled before geometry generation and submits all visible geometry in one draw call per eye. The material atlas is bound once per eye and does not add draw calls. The lower-screen interface remains in Citro2D and is outside this scene budget.
+
+## Surface normals and lighting
+
+Each generated box face receives one exact axis-aligned unit normal: front/back use ±Z, side walls use ±X, and floor/ceiling use ±Y. The host test validates all 36 vertices of a generated box and verifies that every normal has unit length.
+
+The vertex shader applies a fixed directional light aligned with the permanently side-facing camera. Lighting is intentionally inexpensive: `ambient 0.42 + max(dot(normal, light), 0) × diffuse 0.58`. Ambient light keeps back-facing surfaces readable, while the directional term separates floors, ceilings, side walls and front-facing equipment. There are no dynamic lights, shadow maps, extra textures or additional draw calls.
 
 ## Depth layers
 
