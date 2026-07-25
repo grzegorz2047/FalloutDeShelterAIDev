@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +18,10 @@ jobs:
       - name: Execute reviewed pass
         shell: bash
         run: |
+          if grep -q '0xFF56C7F0' source/Scene3DRenderer.cpp; then
+            echo 'game-design pass already applied'
+            exit 0
+          fi
           python3 - <<'PY'
           from pathlib import Path
           source = Path('.github/workflows/apply-game-design-pass.yml').read_text().splitlines()
