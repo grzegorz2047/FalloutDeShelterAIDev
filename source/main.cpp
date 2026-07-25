@@ -225,7 +225,9 @@ int main() {
         return 3;
     }
 
-    Scene3DRenderer scene_renderer;
+    // SceneMesh3D owns a 4096-vertex fixed buffer (~64 KiB). Keep the renderer in
+    // static storage instead of overflowing the small 3DS main-thread stack.
+    static Scene3DRenderer scene_renderer;
     const bool renderer_ready = scene_renderer.initialize();
 
     ShelterCamera camera({kColumns * kCellWidth, kRows * kCellHeight}, {400.0f, 240.0f});
