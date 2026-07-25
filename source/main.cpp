@@ -127,6 +127,17 @@ void draw_text(C2D_TextBuf buffer,
     C2D_DrawText(&text, C2D_WithColor, x, y, 0.5f, scale, scale, color);
 }
 
+const char* room_label(int room_index) {
+    switch ((room_index % 6 + 6) % 6) {
+        case 0: return "ELEKTROWNIA";
+        case 1: return "HYDROPONIKA";
+        case 2: return "UZDATNIANIE WODY";
+        case 3: return "WARSZTAT";
+        case 4: return "MAGAZYN";
+        default: return "KWATERY";
+    }
+}
+
 void draw_resource(GeneratedUiRenderer& atlas,
                    C2D_TextBuf buffer,
                    UiIcon icon,
@@ -201,19 +212,21 @@ void draw_bottom(C3D_RenderTarget* bottom,
                       C2D_Color32(18, 29, 34, 255));
     C2D_DrawRectSolid(10.0f, 77.0f, 0.16f, 4.0f, 82.0f,
                       C2D_Color32(180, 128, 48, 255));
-    draw_text(buffer, "BIEZACE ZADANIE", 22.0f, 86.0f, 0.29f,
-              C2D_Color32(166, 181, 181, 255));
-    draw_text(buffer, state.message, 22.0f, 104.0f, 0.38f,
+    draw_text(buffer, "ZAZNACZONY POKOJ", 22.0f, 84.0f, 0.27f,
+              C2D_Color32(151, 168, 171, 255));
+    draw_text(buffer, room_label(state.selected_room), 22.0f, 98.0f, 0.44f,
+              C2D_Color32(246, 193, 82, 255));
+    draw_text(buffer, state.message, 22.0f, 118.0f, 0.34f,
               C2D_Color32(244, 239, 220, 255));
     char status[128];
     std::snprintf(status, sizeof(status),
-                  "POKOJE %d/6   ZALOGA %d   MAGAZYN %d/30",
+                  "POKOJE %d/6  ZALOGA %d  ZAPAS %d/30",
                   state.rooms, state.workers, state.stored);
-    draw_text(buffer, status, 22.0f, 132.0f, 0.32f,
+    draw_text(buffer, status, 22.0f, 140.0f, 0.31f,
               C2D_Color32(113, 196, 151, 255));
-    draw_text(buffer, "Circle Pad: kamera   L/R: zoom   Suwak 3D: glebia",
-              22.0f, 148.0f, 0.27f,
-              C2D_Color32(118, 137, 145, 255));
+    draw_text(buffer, "D-Pad: pokoj  Pad: kamera  L/R: zoom",
+              22.0f, 154.0f, 0.29f,
+              C2D_Color32(136, 154, 160, 255));
     const int focused_id = ui.focused_id().value_or(-1);
     const int pressed_id = ui.pressed_id().value_or(-1);
     draw_button(atlas, buffer, 10.0f, 1, focused_id, pressed_id, true,

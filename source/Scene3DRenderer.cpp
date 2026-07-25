@@ -49,7 +49,7 @@ u32 room_floor(int room_index) noexcept {
 }
 
 void append_selection_corners(SceneMesh3D& mesh, float x, float y) noexcept {
-    constexpr u32 highlight = 0xFF4DB7E8;
+    constexpr u32 highlight = 0xFF56C7F0;
     constexpr float arm = 21.0f;
     constexpr float thickness = 3.0f;
     constexpr float depth = 3.0f;
@@ -83,12 +83,12 @@ void append_unbuilt_cavity(SceneMesh3D& mesh,
     const u32 brace = rgba(66, 74, 73);
     const u32 blueprint = [&]() noexcept {
         switch ((room_index % 6 + 6) % 6) {
-            case 0: return rgba(154, 112, 43);
-            case 1: return rgba(67, 128, 76);
-            case 2: return rgba(58, 119, 148);
-            case 3: return rgba(139, 83, 48);
-            case 4: return rgba(125, 103, 57);
-            default: return rgba(111, 79, 69);
+            case 0: return rgba(194, 139, 48);
+            case 1: return rgba(82, 158, 91);
+            case 2: return rgba(67, 151, 188);
+            case 3: return rgba(174, 101, 52);
+            case 4: return rgba(164, 132, 65);
+            default: return rgba(151, 99, 82);
         }
     }();
 
@@ -411,11 +411,11 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
         const float door_y = layout::kRoomY[floor_index * 2] + 9.0f;
         mesh_.append_box({layout::kElevatorX + 4.0f, door_y, -4.0f,
                           layout::kElevatorWidth - 8.0f, 43.0f, 6.0f,
-                          floor_index == 1 ? warm_light : steel_mid,
+                          floor_index == 1 ? rgba(117, 79, 35) : steel_mid,
                           assets::GeneratedMaterial::ControlPanel});
         mesh_.append_box({layout::kElevatorX + 10.0f, door_y + 8.0f, -1.0f,
                           layout::kElevatorWidth - 20.0f, 25.0f, 3.0f,
-                          floor_index == 1 ? rgba(236, 184, 82) : rgba(92, 103, 99),
+                          floor_index == 1 ? rgba(166, 122, 57) : rgba(82, 93, 90),
                           assets::GeneratedMaterial::Steel});
     }
     const int active_rooms = std::clamp(state.rooms, 0, 6);
@@ -482,11 +482,11 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     const float zoom = camera.zoom();
     const float center_x = camera.x() + 200.0f / zoom;
     const float center_y = camera.y() + 120.0f / zoom;
-    const float eye_z = 900.0f / zoom;
+    const float eye_z = 1120.0f / zoom;
 
     C3D_Mtx projection;
     Mtx_PerspStereoTilt(&projection,
-                        C3D_AngleFromDegrees(20.0f),
+                        C3D_AngleFromDegrees(22.0f),
                         C3D_AspectRatioTop,
                         1.0f,
                         2000.0f,
