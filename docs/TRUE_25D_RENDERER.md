@@ -29,7 +29,7 @@ The current reference scene is camera-culled before geometry generation and subm
 
 Each generated box face receives one exact axis-aligned unit normal: front/back use ±Z, side walls use ±X, and floor/ceiling use ±Y. The host test validates all 36 vertices of a generated box and verifies that every normal has unit length.
 
-The vertex shader applies a fixed directional light aligned with the permanently side-facing camera. Lighting is intentionally inexpensive: `ambient 0.42 + max(dot(normal, light), 0) × diffuse 0.58`. Ambient light keeps back-facing surfaces readable, while the directional term separates floors, ceilings, side walls and front-facing equipment. There are no dynamic lights, shadow maps, extra textures or additional draw calls.
+The vertex shader applies a fixed directional light aligned with the permanently side-facing camera. Lighting is intentionally inexpensive: `ambient 0.55 + max(dot(normal, light), 0) × diffuse 0.45`. The higher ambient component was selected after Azahar screenshot review to keep rock, excavated cells and side walls readable on the small Nintendo 3DS display. The directional term still separates floors, ceilings, side walls and front-facing equipment. There are no dynamic lights, shadow maps, extra textures or additional draw calls.
 
 ## Depth layers
 
