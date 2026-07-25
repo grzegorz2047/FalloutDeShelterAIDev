@@ -4,8 +4,11 @@
 .fvec projection[4], modelView[4]
 
 ; Constants
-.constf constants(0.0, 1.0, 0.55, 0.45)
+; Bright display profile for the small 3DS screen: subtle directional form,
+; but no face drops below 88% of its authored room colour.
+.constf constants(0.0, 1.0, 0.88, 0.12)
 .constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
+.constf colourLift(0.22, 0.22, 0.22, 0.0)
 ; Scale the compact multifloor cutaway 1.8x around world centre (200, 120).
 .constf framing(1.8, -160.0, -96.0, 0.0)
 .alias ones constants.yyyy
@@ -50,9 +53,12 @@
     mul r2.x, r2.x, r4.w
     add r2.x, r2.x, r4.z
 
-    ; Generated material atlas coordinates and lit vertex tint.
+    ; Generated material atlas coordinates and lit vertex tint. A small display
+    ; lift is applied after lighting so the room interiors remain readable.
     mov outtc0, intex
-    mul outclr.xyz, inclr, r2.x
+    mul r6.xyz, inclr, r2.x
+    mov r5, colourLift
+    add outclr.xyz, r6, r5
     mov outclr.w, inclr.w
     end
 .end
