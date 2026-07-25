@@ -32,13 +32,13 @@ std::uint16_t decoded_pixel(std::size_t pixel_index) noexcept {
 }  // namespace
 
 // Original textures generated specifically for Deep Shelter 3D, then cropped,
-// downsampled and palette-quantized deterministically for the 3DS. This bright
-// display palette preserves the index artwork while avoiding near-black room
-// surfaces on the small upper screen.
+// downsampled and palette-quantized deterministically for the 3DS. The display
+// palette deliberately keeps every material in a mid-to-high luminance range;
+// room type tinting supplies the colour separation in the renderer.
 alignas(16) const std::uint16_t
     kGeneratedMaterialPaletteRgb565[kGeneratedMaterialPaletteEntries] = {
-        0xe6f9, 0xd677, 0xc5f6, 0xb594, 0xa513, 0x94b1, 0x8c50, 0x7c0f,
-        0x73ae, 0x636e, 0x5b2d, 0x52ec, 0x4aab, 0x3a6a, 0x3209, 0x29c8,
+        0xffdd, 0xf79c, 0xef3a, 0xe6f9, 0xde98, 0xce36, 0xc5d5, 0xbd94,
+        0xad33, 0xa4f2, 0x9c91, 0x8c50, 0x840f, 0x7bce, 0x738e, 0x6b4d,
 };
 
 alignas(16) const std::uint8_t
