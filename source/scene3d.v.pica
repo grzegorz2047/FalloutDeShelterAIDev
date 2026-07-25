@@ -4,7 +4,7 @@
 .fvec projection[4], modelView[4]
 
 ; Constants
-.constf constants(0.0, 1.0, 0.42, 0.58)
+.constf constants(0.0, 1.0, 0.55, 0.45)
 .constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
 .alias ones constants.yyyy
 
