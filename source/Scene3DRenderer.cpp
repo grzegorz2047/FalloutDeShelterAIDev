@@ -433,6 +433,15 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                           floor_index == 1 ? rgba(166, 122, 57) : rgba(82, 93, 90),
                           assets::GeneratedMaterial::Steel});
     }
+    if (!state.resident_assigned) {
+        constexpr float idle_y = layout::kRoomY[2] + 14.0f;
+        mesh_.append_box({layout::kElevatorX + 11.0f, idle_y, -1.0f,
+                          8.0f, 9.0f, 6.0f,
+                          rgba(245, 210, 174), assets::GeneratedMaterial::Steel});
+        mesh_.append_box({layout::kElevatorX + 8.0f, idle_y + 9.0f, -1.0f,
+                          14.0f, 24.0f, 6.0f,
+                          rgba(48, 119, 164), assets::GeneratedMaterial::ControlPanel});
+    }
     const int active_rooms = std::clamp(state.rooms, 0, 6);
     for (int room_index = 0; room_index < 6; ++room_index) {
         const float x = layout::kRoomX[room_index];
