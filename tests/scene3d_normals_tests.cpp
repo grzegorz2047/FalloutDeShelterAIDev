@@ -50,9 +50,11 @@ int main() {
                                  0xffffffffu, GeneratedMaterial::ControlPanel}));
     vertices = mesh.data();
     constexpr float tile_width = 1.0f / 8.0f;
-    constexpr float inset = 0.002f;
+    constexpr float inset = 0.0045f;
     assert(near(vertices[0].u, 7.0f * tile_width + inset));
     assert(near(vertices[1].u, 8.0f * tile_width - inset));
+    assert(vertices[0].u > 7.0f * tile_width);
+    assert(vertices[1].u < 8.0f * tile_width);
 
     mesh.clear();
     assert(mesh.vertex_count() == 0);
