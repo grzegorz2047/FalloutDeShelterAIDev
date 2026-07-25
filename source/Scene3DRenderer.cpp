@@ -358,7 +358,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                                           const ShelterSceneState3D& state,
                                           RenderStats& stats) noexcept {
     mesh_.clear();
-
     const u32 deep_void = rgba(13, 14, 14);
     const u32 rock_dark = rgba(34, 29, 26);
     const u32 rock_mid = rgba(54, 45, 38);
@@ -366,11 +365,9 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
     const u32 steel_dark = rgba(35, 43, 44);
     const u32 steel_mid = rgba(61, 72, 72);
     const u32 warm_light = rgba(206, 139, 48);
-
     mesh_.append_box({layout::kBackdropX, layout::kBackdropY, -34.0f,
                       layout::kBackdropWidth, layout::kBackdropHeight, 8.0f,
                       deep_void, assets::GeneratedMaterial::Rock});
-
     mesh_.append_box({2.0f, 8.0f, -29.0f, 26.0f, 72.0f, 18.0f,
                       rock_mid, assets::GeneratedMaterial::Rock});
     mesh_.append_box({0.0f, 72.0f, -25.0f, 35.0f, 83.0f, 14.0f,
@@ -395,7 +392,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                       rock_dark, assets::GeneratedMaterial::Rock});
     mesh_.append_box({278.0f, 216.0f, -31.0f, 104.0f, 22.0f, 20.0f,
                       rock_mid, assets::GeneratedMaterial::Rock});
-
     for (int floor_index = 0; floor_index < 3; ++floor_index) {
         const float y = layout::kRoomY[floor_index * 2] + layout::kRoomHeight;
         mesh_.append_box({28.0f, y - 1.0f, -10.0f, 157.0f, 6.0f, 13.0f,
@@ -405,7 +401,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                           floor_index == 0 ? rock_mid : steel_dark,
                           assets::GeneratedMaterial::Grating});
     }
-
     mesh_.append_box({layout::kElevatorX - 4.0f, layout::kElevatorY - 5.0f, -20.0f,
                       layout::kElevatorWidth + 8.0f, layout::kElevatorHeight + 10.0f,
                       8.0f, rock_dark, assets::GeneratedMaterial::Rock});
@@ -423,7 +418,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                           floor_index == 1 ? rgba(236, 184, 82) : rgba(92, 103, 99),
                           assets::GeneratedMaterial::Steel});
     }
-
     const int active_rooms = std::clamp(state.rooms, 0, 6);
     for (int room_index = 0; room_index < 6; ++room_index) {
         const float x = layout::kRoomX[room_index];
@@ -442,7 +436,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                     active && state.resident_assigned && room_index == state.selected_room,
                     active && room_index == state.selected_room ? state.stored : 0);
     }
-
     stats.draw_calls = mesh_.vertex_count() > 0 ? 1 : 0;
     stats.estimated_linear_memory =
         mesh_.vertex_count() * sizeof(Vertex3D) + assets::kGeneratedMaterialRuntimeBytes;
