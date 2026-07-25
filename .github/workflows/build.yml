@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends curl jq xvfb x11-utils imagemagick libfuse2 libgl1 libopengl0 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+          sudo apt-get install -y --no-install-recommends curl jq xvfb x11-utils xdotool imagemagick libfuse2 libgl1 libopengl0 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
       - name: Download Azahar
         shell: bash
         run: |
@@ -90,7 +90,7 @@ jobs:
           mkdir -p azahar-home
           HOME="$PWD/azahar-home" timeout 90s xvfb-run -a ./squashfs-root/AppRun --install "$PWD/dist/DeepShelter3D.cia" 2>&1 | tee azahar-cia-install.log
           grep -q "Installed CIA successfully" azahar-cia-install.log
-      - name: Launch 3DSX and verify first frame
+      - name: Launch 3DSX and verify six-room presentation frame
         shell: bash
         timeout-minutes: 2
         run: |
@@ -138,6 +138,15 @@ jobs:
             fi
           done
 
+          window_id=$(xdotool search --name '^Azahar [0-9]' | tail -n 1)
+          test -n "$window_id"
+          xdotool windowfocus --sync "$window_id"
+          for room in $(seq 1 5); do
+            xdotool key z
+            sleep 0.5
+          done
+          sleep 3
+
           timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
           if grep -Eq "An exception occurred|ExceptionRaised|NoExecuteFault" azahar-window-tree.log azahar-3dsx-launch.log; then
             echo "Azahar reported an emulated application exception." >&2
@@ -149,7 +158,7 @@ jobs:
           timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
           test -s azahar-first-frame.png
           colors=$(timeout 10s identify -format '%k' azahar-first-frame.png)
-          echo "Captured first frame with $colors colors"
+          echo "Captured six-room presentation frame with $colors colors"
           test "$colors" -gt 16
 
           if grep -Eq "could not connect to display|X11 connection broke|terminate called|Fatal|Unhandled exception" azahar-3dsx-launch.log; then
