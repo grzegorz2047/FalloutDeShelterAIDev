@@ -26,8 +26,7 @@ u32 room_accent(int room_index) noexcept {
     }
 }
 
-u32 room_back_wall(int room_index, bool active) noexcept {
-    if (!active) return rgba(142, 151, 151);
+u32 room_back_wall(int room_index) noexcept {
     switch ((room_index % 6 + 6) % 6) {
         case 0: return rgba(223, 204, 147);
         case 1: return rgba(173, 220, 164);
@@ -38,8 +37,7 @@ u32 room_back_wall(int room_index, bool active) noexcept {
     }
 }
 
-u32 room_floor(int room_index, bool active) noexcept {
-    if (!active) return rgba(126, 137, 138);
+u32 room_floor(int room_index) noexcept {
     switch ((room_index % 6 + 6) % 6) {
         case 0: return rgba(183, 157, 88);
         case 1: return rgba(104, 164, 102);
@@ -50,8 +48,61 @@ u32 room_floor(int room_index, bool active) noexcept {
     }
 }
 
-u32 active_or_muted(u32 active_color, bool active) noexcept {
-    return active ? active_color : rgba(142, 151, 151);
+void append_selection_corners(SceneMesh3D& mesh, float x, float y) noexcept {
+    constexpr u32 highlight = 0xFFE7A8FF;
+    constexpr float arm = 21.0f;
+    constexpr float thickness = 3.0f;
+    constexpr float depth = 3.0f;
+    const float right = x + layout::kRoomWidth;
+    const float bottom = y + layout::kRoomHeight;
+
+    mesh.append_box({x - 2.0f, y - 2.0f, -1.0f, arm, thickness, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({x - 2.0f, y - 2.0f, -1.0f, thickness, arm, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({right - arm + 2.0f, y - 2.0f, -1.0f, arm, thickness, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({right - 1.0f, y - 2.0f, -1.0f, thickness, arm, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({x - 2.0f, bottom - 1.0f, -1.0f, arm, thickness, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({x - 2.0f, bottom - arm + 2.0f, -1.0f, thickness, arm, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({right - arm + 2.0f, bottom - 1.0f, -1.0f, arm, thickness, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+    mesh.append_box({right - 1.0f, bottom - arm + 2.0f, -1.0f, thickness, arm, depth,
+                     highlight, assets::GeneratedMaterial::Steel});
+}
+
+void append_unbuilt_cavity(SceneMesh3D& mesh, float x, float y) noexcept {
+    const u32 rock = rgba(111, 104, 101);
+    const u32 cut_rock = rgba(132, 124, 119);
+    const u32 brace = rgba(151, 162, 160);
+    const u32 warning = rgba(225, 166, 64);
+
+    mesh.append_box({x + 4.0f, y + 4.0f, -19.0f,
+                     layout::kRoomWidth - 8.0f, layout::kRoomHeight - 8.0f, 5.0f,
+                     rock, assets::GeneratedMaterial::Rock});
+    mesh.append_box({x + 8.0f, y + 9.0f, -15.0f,
+                     layout::kRoomWidth - 16.0f, layout::kRoomHeight - 19.0f, 3.0f,
+                     cut_rock, assets::GeneratedMaterial::Rock});
+
+    mesh.append_box({x + 8.0f, y + 7.0f, -9.0f, 6.0f,
+                     layout::kRoomHeight - 14.0f, 8.0f,
+                     brace, assets::GeneratedMaterial::Steel});
+    mesh.append_box({x + layout::kRoomWidth - 14.0f, y + 7.0f, -9.0f, 6.0f,
+                     layout::kRoomHeight - 14.0f, 8.0f,
+                     brace, assets::GeneratedMaterial::Steel});
+    mesh.append_box({x + 8.0f, y + layout::kRoomHeight - 15.0f, -8.0f,
+                     layout::kRoomWidth - 16.0f, 7.0f, 8.0f,
+                     brace, assets::GeneratedMaterial::Grating});
+
+    for (int marker = 0; marker < 3; ++marker) {
+        mesh.append_box({x + 36.0f + marker * 20.0f, y + 24.0f, -5.0f,
+                         12.0f, 12.0f, 4.0f,
+                         marker == 1 ? warning : rgba(105, 113, 113),
+                         assets::GeneratedMaterial::ControlPanel});
+    }
 }
 
 }  // namespace
@@ -142,12 +193,15 @@ void Scene3DRenderer::append_room(float x,
                                   bool selected,
                                   bool resident,
                                   int stored) noexcept {
-    const u32 frame = selected ? rgba(255, 246, 150)
-                               : active ? rgba(214, 228, 222)
-                                        : rgba(150, 160, 160);
-    const u32 accent = active_or_muted(room_accent(room_index), active);
-    const u32 wall = room_back_wall(room_index, active);
-    const u32 floor = room_floor(room_index, active);
+    if (!active) {
+        append_unbuilt_cavity(mesh_, x, y);
+        return;
+    }
+
+    const u32 frame = selected ? rgba(238, 224, 157) : rgba(214, 228, 222);
+    const u32 accent = room_accent(room_index);
+    const u32 wall = room_back_wall(room_index);
+    const u32 floor = room_floor(room_index);
 
     constexpr float wall_inset = 5.0f;
     constexpr float frame_depth = 18.0f;
@@ -172,19 +226,17 @@ void Scene3DRenderer::append_room(float x,
                       assets::GeneratedMaterial::Grating});
 
     switch (room_index % 6) {
-        case 0:  // Power generation: two large turbines and a control pillar.
+        case 0:
             mesh_.append_box({x + 12.0f, y + 20.0f, -8.0f, 31.0f, 31.0f, 11.0f,
                               accent, assets::GeneratedMaterial::ControlPanel});
             mesh_.append_box({x + 50.0f, y + 14.0f, -7.0f, 22.0f, 37.0f, 10.0f,
-                              active_or_muted(rgba(231, 225, 180), active),
-                              assets::GeneratedMaterial::Steel});
+                              rgba(231, 225, 180), assets::GeneratedMaterial::Steel});
             mesh_.append_box({x + 80.0f, y + 22.0f, -8.0f, 38.0f, 29.0f, 11.0f,
                               accent, assets::GeneratedMaterial::ControlPanel});
             break;
-        case 1:  // Hydroponics: long grow bed and three plant clusters.
+        case 1:
             mesh_.append_box({x + 11.0f, y + 39.0f, -7.0f, 110.0f, 12.0f, 9.0f,
-                              active_or_muted(rgba(105, 181, 103), active),
-                              assets::GeneratedMaterial::Grating});
+                              rgba(105, 181, 103), assets::GeneratedMaterial::Grating});
             mesh_.append_box({x + 19.0f, y + 24.0f, -4.0f, 16.0f, 15.0f, 5.0f,
                               accent, assets::GeneratedMaterial::ControlPanel});
             mesh_.append_box({x + 57.0f, y + 19.0f, -4.0f, 18.0f, 20.0f, 5.0f,
@@ -192,76 +244,56 @@ void Scene3DRenderer::append_room(float x,
             mesh_.append_box({x + 96.0f, y + 26.0f, -4.0f, 14.0f, 13.0f, 5.0f,
                               accent, assets::GeneratedMaterial::ControlPanel});
             break;
-        case 2:  // Water treatment: tall tank, filters and pipe riser.
+        case 2:
             mesh_.append_box({x + 12.0f, y + 15.0f, -9.0f, 32.0f, 36.0f, 11.0f,
                               accent, assets::GeneratedMaterial::Steel});
             mesh_.append_box({x + 52.0f, y + 26.0f, -8.0f, 57.0f, 25.0f, 10.0f,
-                              active_or_muted(rgba(103, 190, 222), active),
-                              assets::GeneratedMaterial::ControlPanel});
+                              rgba(103, 190, 222), assets::GeneratedMaterial::ControlPanel});
             mesh_.append_box({x + 66.0f, y + 10.0f, -5.0f, 8.0f, 16.0f, 5.0f,
-                              active_or_muted(rgba(191, 229, 237), active),
-                              assets::GeneratedMaterial::Steel});
+                              rgba(191, 229, 237), assets::GeneratedMaterial::Steel});
             break;
-        case 3:  // Workshop: full-width bench, tool cabinet and press.
+        case 3:
             mesh_.append_box({x + 10.0f, y + 38.0f, -8.0f, 112.0f, 13.0f, 10.0f,
-                              active_or_muted(rgba(165, 130, 94), active),
-                              assets::GeneratedMaterial::Grating});
+                              rgba(165, 130, 94), assets::GeneratedMaterial::Grating});
             mesh_.append_box({x + 18.0f, y + 20.0f, -6.0f, 36.0f, 18.0f, 8.0f,
                               accent, assets::GeneratedMaterial::ControlPanel});
             mesh_.append_box({x + 79.0f, y + 15.0f, -7.0f, 29.0f, 23.0f, 9.0f,
-                              active_or_muted(rgba(222, 188, 123), active),
-                              assets::GeneratedMaterial::Steel});
+                              rgba(222, 188, 123), assets::GeneratedMaterial::Steel});
             break;
-        case 4:  // Storage: five large crates and an upper shelf.
+        case 4:
             for (int crate = 0; crate < 5; ++crate) {
                 mesh_.append_box({x + 10.0f + crate * 23.0f, y + 31.0f, -7.0f,
                                   18.0f, 20.0f, 8.0f, accent,
                                   assets::GeneratedMaterial::Steel});
             }
             mesh_.append_box({x + 17.0f, y + 16.0f, -5.0f, 98.0f, 6.0f, 5.0f,
-                              active_or_muted(rgba(205, 211, 183), active),
-                              assets::GeneratedMaterial::Grating});
+                              rgba(205, 211, 183), assets::GeneratedMaterial::Grating});
             break;
-        default:  // Living quarters: bed, table and wardrobe.
+        default:
             mesh_.append_box({x + 10.0f, y + 37.0f, -7.0f, 48.0f, 14.0f, 8.0f,
-                              active_or_muted(rgba(183, 145, 111), active),
-                              assets::GeneratedMaterial::Steel});
+                              rgba(183, 145, 111), assets::GeneratedMaterial::Steel});
             mesh_.append_box({x + 74.0f, y + 36.0f, -7.0f, 45.0f, 15.0f, 8.0f,
                               accent, assets::GeneratedMaterial::Steel});
             mesh_.append_box({x + 54.0f, y + 20.0f, -5.0f, 23.0f, 12.0f, 6.0f,
-                              active_or_muted(rgba(237, 217, 166), active),
-                              assets::GeneratedMaterial::ControlPanel});
+                              rgba(237, 217, 166), assets::GeneratedMaterial::ControlPanel});
             break;
     }
 
     const float fill = std::clamp(static_cast<float>(stored) / 30.0f, 0.0f, 1.0f);
-    if (active && fill > 0.0f) {
+    if (fill > 0.0f) {
         mesh_.append_box({x + 10.0f, y + 8.0f, -3.0f,
                           (layout::kRoomWidth - 20.0f) * fill, 4.0f, 5.0f,
                           rgba(112, 255, 177), assets::GeneratedMaterial::Grating});
     }
 
-    if (active && resident) {
+    if (resident) {
         mesh_.append_box({x + 88.0f, y + 26.0f, -2.0f, 11.0f, 13.0f, 5.0f,
                           rgba(255, 225, 191), assets::GeneratedMaterial::Steel});
         mesh_.append_box({x + 84.0f, y + 39.0f, -2.0f, 19.0f, 17.0f, 5.0f,
                           rgba(102, 204, 218), assets::GeneratedMaterial::Steel});
     }
 
-    if (selected) {
-        constexpr u32 highlight = 0xFFF7A8FF;
-        mesh_.append_box({x - 3.0f, y - 3.0f, -1.0f,
-                          layout::kRoomWidth + 6.0f, 4.0f, 4.0f,
-                          highlight, assets::GeneratedMaterial::Steel});
-        mesh_.append_box({x - 3.0f, y + layout::kRoomHeight - 1.0f, -1.0f,
-                          layout::kRoomWidth + 6.0f, 4.0f, 4.0f,
-                          highlight, assets::GeneratedMaterial::Steel});
-        mesh_.append_box({x - 3.0f, y, -1.0f, 4.0f, layout::kRoomHeight, 4.0f,
-                          highlight, assets::GeneratedMaterial::Steel});
-        mesh_.append_box({x + layout::kRoomWidth - 1.0f, y, -1.0f,
-                          4.0f, layout::kRoomHeight, 4.0f,
-                          highlight, assets::GeneratedMaterial::Steel});
-    }
+    if (selected) append_selection_corners(mesh_, x, y);
 }
 
 void Scene3DRenderer::build_scene(const ShelterCamera& camera,
