@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/large-dense-rooms
+          fetch-depth: 0
       - name: Apply reviewed room-identity pass
         run: python3 .github/scripts/apply_room_identity_pass.py
       - name: Verify reviewed visual diff
@@ -39,6 +40,8 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add source/Scene3DRenderer.cpp
           git commit -m "visuals: give rooms distinct silhouettes and lighting"
+          git fetch origin agent/large-dense-rooms
+          git rebase origin/agent/large-dense-rooms
           git push origin HEAD:agent/large-dense-rooms
       - name: Validate asset manifest and denylist
         run: python3 scripts/check_asset_policy.py
