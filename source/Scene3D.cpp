@@ -4,6 +4,7 @@ namespace deep_shelter::render {
 namespace {
 
 constexpr std::size_t kVerticesPerBox = 36;
+constexpr float kByteToUnit = 1.0f / 255.0f;
 
 void write_triangle(Vertex3D* out,
                     const Vertex3D& a,
@@ -12,6 +13,16 @@ void write_triangle(Vertex3D* out,
     out[0] = a;
     out[1] = b;
     out[2] = c;
+}
+
+Vertex3D make_vertex(float x, float y, float z, std::uint32_t color) noexcept {
+    return {x,
+            y,
+            z,
+            static_cast<float>(color & 0xffu) * kByteToUnit,
+            static_cast<float>((color >> 8) & 0xffu) * kByteToUnit,
+            static_cast<float>((color >> 16) & 0xffu) * kByteToUnit,
+            static_cast<float>((color >> 24) & 0xffu) * kByteToUnit};
 }
 
 }  // namespace
@@ -39,14 +50,14 @@ bool SceneMesh3D::append_box(const Box3D& box) noexcept {
     const float z1 = box.z + box.depth;
     const std::uint32_t c = box.color;
 
-    const Vertex3D p000{x0, y0, z0, c};
-    const Vertex3D p001{x0, y0, z1, c};
-    const Vertex3D p010{x0, y1, z0, c};
-    const Vertex3D p011{x0, y1, z1, c};
-    const Vertex3D p100{x1, y0, z0, c};
-    const Vertex3D p101{x1, y0, z1, c};
-    const Vertex3D p110{x1, y1, z0, c};
-    const Vertex3D p111{x1, y1, z1, c};
+    const Vertex3D p000 = make_vertex(x0, y0, z0, c);
+    const Vertex3D p001 = make_vertex(x0, y0, z1, c);
+    const Vertex3D p010 = make_vertex(x0, y1, z0, c);
+    const Vertex3D p011 = make_vertex(x0, y1, z1, c);
+    const Vertex3D p100 = make_vertex(x1, y0, z0, c);
+    const Vertex3D p101 = make_vertex(x1, y0, z1, c);
+    const Vertex3D p110 = make_vertex(x1, y1, z0, c);
+    const Vertex3D p111 = make_vertex(x1, y1, z1, c);
 
     Vertex3D* out = vertices_.data() + vertex_count_;
 
