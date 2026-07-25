@@ -92,6 +92,7 @@ jobs:
           grep -q "Installed CIA successfully" azahar-cia-install.log
       - name: Launch 3DSX and verify first frame
         shell: bash
+        timeout-minutes: 2
         run: |
           set -euo pipefail
 
@@ -104,7 +105,13 @@ jobs:
 
           Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > azahar-xvfb.log 2>&1 &
           xvfb_pid=$!
-          trap 'kill ${azahar_pid:-} $xvfb_pid 2>/dev/null || true' EXIT
+          cleanup() {
+            if [ -n "${azahar_pid:-}" ]; then
+              kill -- -"$azahar_pid" 2>/dev/null || true
+            fi
+            kill "$xvfb_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
 
           for attempt in $(seq 1 20); do
             if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
@@ -118,7 +125,7 @@ jobs:
           done
           xdpyinfo -display "$DISPLAY" >/dev/null
 
-          HOME="$PWD/azahar-home" ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
+          HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
           azahar_pid=$!
 
           for second in $(seq 1 18); do
@@ -131,10 +138,10 @@ jobs:
             fi
           done
 
-          xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
-          import -display "$DISPLAY" -window root azahar-first-frame.png
+          timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
+          timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
           test -s azahar-first-frame.png
-          colors=$(identify -format '%k' azahar-first-frame.png)
+          colors=$(timeout 10s identify -format '%k' azahar-first-frame.png)
           echo "Captured first frame with $colors colors"
           test "$colors" -gt 16
 
@@ -143,8 +150,13 @@ jobs:
             exit 1
           fi
 
-          kill "$azahar_pid" 2>/dev/null || true
-          wait "$azahar_pid" 2>/dev/null || true
+          kill -- -"$azahar_pid" 2>/dev/null || true
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$azahar_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
       - name: Upload Azahar logs and first frame
         if: always()
         uses: actions/upload-artifact@v4
