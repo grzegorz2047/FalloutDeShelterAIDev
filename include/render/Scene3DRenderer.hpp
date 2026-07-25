@@ -47,9 +47,11 @@ private:
     shaderProgram_s program_{};
     DVLB_s* shader_dvlb_ = nullptr;
     Vertex3D* vertex_buffer_ = nullptr;
+    C3D_Tex material_texture_{};
     int projection_uniform_ = -1;
     int model_view_uniform_ = -1;
     bool program_initialized_ = false;
+    bool texture_initialized_ = false;
     bool initialized_ = false;
 };
 

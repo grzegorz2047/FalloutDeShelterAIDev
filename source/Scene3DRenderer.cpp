@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "assets/GeneratedMaterialAtlas.hpp"
 #include "scene3d_v_shbin.h"
 
 namespace deep_shelter::render {
@@ -62,12 +63,33 @@ bool Scene3DRenderer::initialize() noexcept {
         return false;
     }
 
+    if (!C3D_TexInit(&material_texture_,
+                     static_cast<u16>(assets::kGeneratedMaterialAtlasWidth),
+                     static_cast<u16>(assets::kGeneratedMaterialAtlasHeight),
+                     GPU_RGB565)) {
+        shutdown();
+        return false;
+    }
+    texture_initialized_ = true;
+    assets::decode_generated_material_atlas_tiled(
+        static_cast<std::uint16_t*>(material_texture_.data),
+        assets::kGeneratedMaterialPixelCount);
+    C3D_TexFlush(&material_texture_);
+    C3D_TexSetFilter(&material_texture_, GPU_NEAREST, GPU_NEAREST);
+    C3D_TexSetWrap(&material_texture_, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+
     initialized_ = true;
     return true;
 }
 
 void Scene3DRenderer::shutdown() noexcept {
     initialized_ = false;
+
+    if (texture_initialized_) {
+        C3D_TexDelete(&material_texture_);
+        material_texture_ = {};
+        texture_initialized_ = false;
+    }
 
     if (vertex_buffer_ != nullptr) {
         linearFree(vertex_buffer_);
@@ -95,33 +117,42 @@ void Scene3DRenderer::append_room(float x,
                                   bool selected,
                                   bool resident,
                                   int stored) noexcept {
-    const u32 frame = selected ? rgba(235, 188, 72) : rgba(91, 103, 105);
-    const u32 steel = rgba(53, 66, 68);
-    const u32 dark = rgba(31, 39, 43);
+    const u32 frame = selected ? rgba(255, 216, 118) : rgba(185, 201, 198);
+    const u32 steel = rgba(180, 205, 202);
+    const u32 dark = rgba(155, 174, 169);
     const u32 accent = room_accent(room_index);
 
-    mesh_.append_box({x + 3.0f, y + 3.0f, -18.0f, 66.0f, 46.0f, 4.0f, steel});
-    mesh_.append_box({x, y, -14.0f, 72.0f, 4.0f, 18.0f, frame});
-    mesh_.append_box({x, y + 48.0f, -14.0f, 72.0f, 4.0f, 18.0f, frame});
-    mesh_.append_box({x, y, -14.0f, 4.0f, 52.0f, 18.0f, frame});
-    mesh_.append_box({x + 68.0f, y, -14.0f, 4.0f, 52.0f, 18.0f, frame});
-    mesh_.append_box({x + 4.0f, y + 43.0f, -10.0f, 64.0f, 5.0f, 14.0f, dark});
+    mesh_.append_box({x + 3.0f, y + 3.0f, -18.0f, 66.0f, 46.0f, 4.0f, steel,
+                      assets::GeneratedMaterial::Steel});
+    mesh_.append_box({x, y, -14.0f, 72.0f, 4.0f, 18.0f, frame,
+                      assets::GeneratedMaterial::Steel});
+    mesh_.append_box({x, y + 48.0f, -14.0f, 72.0f, 4.0f, 18.0f, frame,
+                      assets::GeneratedMaterial::Steel});
+    mesh_.append_box({x, y, -14.0f, 4.0f, 52.0f, 18.0f, frame,
+                      assets::GeneratedMaterial::Steel});
+    mesh_.append_box({x + 68.0f, y, -14.0f, 4.0f, 52.0f, 18.0f, frame,
+                      assets::GeneratedMaterial::Steel});
+    mesh_.append_box({x + 4.0f, y + 43.0f, -10.0f, 64.0f, 5.0f, 14.0f, dark,
+                      assets::GeneratedMaterial::Grating});
 
-    mesh_.append_box({x + 10.0f, y + 25.0f, -9.0f, 14.0f, 18.0f, 10.0f, accent});
-    mesh_.append_box({x + 29.0f, y + 18.0f, -8.0f, 15.0f, 25.0f, 9.0f, accent});
-    mesh_.append_box({x + 50.0f, y + 29.0f, -7.0f, 11.0f, 14.0f, 8.0f, accent});
+    mesh_.append_box({x + 10.0f, y + 25.0f, -9.0f, 14.0f, 18.0f, 10.0f, accent,
+                      assets::GeneratedMaterial::ControlPanel});
+    mesh_.append_box({x + 29.0f, y + 18.0f, -8.0f, 15.0f, 25.0f, 9.0f,
+                      rgba(190, 217, 211), assets::GeneratedMaterial::Steel});
+    mesh_.append_box({x + 50.0f, y + 29.0f, -7.0f, 11.0f, 14.0f, 8.0f, accent,
+                      assets::GeneratedMaterial::ControlPanel});
 
     const float fill = std::clamp(static_cast<float>(stored) / 30.0f, 0.0f, 1.0f);
     if (fill > 0.0f) {
         mesh_.append_box({x + 8.0f, y + 7.0f, -5.0f, 52.0f * fill, 3.0f, 5.0f,
-                          rgba(89, 211, 138)});
+                          rgba(110, 255, 171), assets::GeneratedMaterial::Grating});
     }
 
     if (resident) {
         mesh_.append_box({x + 45.0f, y + 24.0f, -3.0f, 7.0f, 9.0f, 6.0f,
-                          rgba(224, 191, 151)});
+                          rgba(255, 220, 183), assets::GeneratedMaterial::Steel});
         mesh_.append_box({x + 43.0f, y + 33.0f, -3.0f, 11.0f, 10.0f, 6.0f,
-                          rgba(54, 117, 126)});
+                          rgba(95, 196, 210), assets::GeneratedMaterial::Steel});
     }
 }
 
@@ -153,20 +184,22 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                             room_index == state.selected_room ? state.stored : 0);
             } else if (excavated) {
                 mesh_.append_box({x + 2.0f, y + 2.0f, -18.0f, 68.0f, 48.0f, 6.0f,
-                                  rgba(28, 47, 51)});
+                                  rgba(130, 156, 151), assets::GeneratedMaterial::Rock});
                 mesh_.append_box({x + 2.0f, y + 46.0f, -10.0f, 68.0f, 4.0f, 10.0f,
-                                  rgba(72, 82, 80)});
+                                  rgba(155, 170, 164), assets::GeneratedMaterial::Grating});
             } else {
-                const u8 shade = static_cast<u8>(35 + ((column * 13 + row * 7) & 15));
+                const u8 shade = static_cast<u8>(145 + ((column * 13 + row * 7) & 31));
                 mesh_.append_box({x, y, -24.0f, 70.0f, 50.0f, 22.0f,
-                                  rgba(shade, static_cast<u8>(shade - 3),
-                                       static_cast<u8>(shade - 1))});
+                                  rgba(shade, static_cast<u8>(shade - 8),
+                                       static_cast<u8>(shade - 3)),
+                                  assets::GeneratedMaterial::Rock});
             }
         }
     }
 
     stats.draw_calls = mesh_.vertex_count() > 0 ? 1 : 0;
-    stats.estimated_linear_memory = mesh_.vertex_count() * sizeof(Vertex3D);
+    stats.estimated_linear_memory =
+        mesh_.vertex_count() * sizeof(Vertex3D) + assets::kGeneratedMaterialRuntimeBytes;
 }
 
 void Scene3DRenderer::draw(C3D_RenderTarget* target,
@@ -189,16 +222,22 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     C3D_AttrInfo* attr_info = C3D_GetAttrInfo();
     AttrInfo_Init(attr_info);
     AttrInfo_AddLoader(attr_info, 0, GPU_FLOAT, 3);
-    AttrInfo_AddLoader(attr_info, 1, GPU_FLOAT, 4);
+    AttrInfo_AddLoader(attr_info, 1, GPU_FLOAT, 2);
+    AttrInfo_AddLoader(attr_info, 2, GPU_FLOAT, 4);
 
     C3D_BufInfo* buf_info = C3D_GetBufInfo();
     BufInfo_Init(buf_info);
-    BufInfo_Add(buf_info, vertex_buffer_, sizeof(Vertex3D), 2, 0x10);
+    BufInfo_Add(buf_info, vertex_buffer_, sizeof(Vertex3D), 3, 0x210);
 
+    C3D_TexBind(0, &material_texture_);
     C3D_TexEnv* env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
-    C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR);
-    C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+    C3D_TexEnvSrc(env,
+                  C3D_Both,
+                  GPU_TEXTURE0,
+                  GPU_PRIMARY_COLOR,
+                  GPU_PRIMARY_COLOR);
+    C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
 
     const float zoom = camera.zoom();
     const float center_x = camera.x() + 200.0f / zoom;

@@ -1,4 +1,4 @@
-; Deep Shelter 3D fixed side-view vertex shader
+; Deep Shelter 3D fixed side-view textured vertex shader
 
 ; Uniforms
 .fvec projection[4], modelView[4]
@@ -9,11 +9,13 @@
 
 ; Outputs
 .out outpos position
+.out outtc0 texcoord0
 .out outclr color
 
 ; Inputs
 .alias inpos v0
-.alias inclr v1
+.alias intex v1
+.alias inclr v2
 
 .proc main
     ; Homogeneous world position
@@ -32,7 +34,8 @@
     dp4 outpos.z, projection[2], r1
     dp4 outpos.w, projection[3], r1
 
-    ; Procedural vertex colour
+    ; Generated material atlas coordinates and vertex tint
+    mov outtc0, intex
     mov outclr, inclr
     end
 .end

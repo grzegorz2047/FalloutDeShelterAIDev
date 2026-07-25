@@ -78,6 +78,7 @@ test:
 	@$(PYTHON) scripts/validate_content.py
 	@$(PYTHON) tests/content_validator_tests.py
 	@$(PYTHON) -m py_compile scripts/check_asset_policy.py scripts/generate_release_assets.py scripts/validate_content.py tests/content_validator_tests.py
+	@bash scripts/run_generated_asset_tests.sh
 
 3dsx: tools assets $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile 3dsx

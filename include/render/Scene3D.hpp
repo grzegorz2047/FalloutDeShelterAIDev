@@ -4,12 +4,16 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "assets/GeneratedMaterialAtlas.hpp"
+
 namespace deep_shelter::render {
 
 struct Vertex3D {
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;
+    float u = 0.0f;
+    float v = 0.0f;
     float r = 1.0f;
     float g = 1.0f;
     float b = 1.0f;
@@ -24,6 +28,7 @@ struct Box3D {
     float height = 0.0f;
     float depth = 0.0f;
     std::uint32_t color = 0xffffffffu;
+    assets::GeneratedMaterial material = assets::GeneratedMaterial::Steel;
 };
 
 struct FixedSideCamera {
