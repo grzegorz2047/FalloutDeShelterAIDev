@@ -33,9 +33,7 @@ jobs:
     stats.draw_calls = mesh_.vertex_count() > 0 ? 3 : 0;'''
           new_tail = '''    prop_vertex_end_ = mesh_.vertex_count();
 
-    // A real third pass: illuminated strips for every completed room and
-    // selection corners for the active room. These are appended after the
-    // opaque prop range so C3D issues a separate draw call.
+    // Real third pass: illuminated strips and selection foreground.
     for (int room = 0; room < active_rooms; ++room) {
         const float x = layout::kRoomX[room];
         const float y = layout::kRoomY[room];
@@ -59,12 +57,11 @@ jobs:
               raise SystemExit('pass anchor not found')
           path.write_text(text.replace(old_tail, new_tail, 1))
           PY
-      - name: Commit patch and remove helper workflow
+      - name: Commit renderer patch
         shell: bash
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git rm .github/workflows/one-shot-render-pass-fix.yml
           git add source/Scene3DRenderer.cpp
           git commit -m "visuals: separate room accents into third render pass"
           git push origin HEAD:agent/richer-room-props-83
