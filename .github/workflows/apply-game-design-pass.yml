@@ -55,43 +55,30 @@ jobs:
           }
 
           '''
-          if helper not in text:
+          if 'const char* room_label(' not in text:
               if anchor not in text:
                   raise SystemExit('missing main anchor')
               text = text.replace(anchor, helper + anchor, 1)
-          old = '''    draw_text(buffer, "BIEZACE ZADANIE", 22.0f, 86.0f, 0.29f,
-                    C2D_Color32(166, 181, 181, 255));
-              draw_text(buffer, state.message, 22.0f, 104.0f, 0.38f,
-                    C2D_Color32(244, 239, 220, 255));
-              char status[128];
-              std::snprintf(status, sizeof(status),
-                            "POKOJE %d/6   ZALOGA %d   MAGAZYN %d/30",
-                            state.rooms, state.workers, state.stored);
-              draw_text(buffer, status, 22.0f, 132.0f, 0.32f,
-                    C2D_Color32(113, 196, 151, 255));
-              draw_text(buffer, "Circle Pad: kamera   L/R: zoom   Suwak 3D: glebia",
-                    22.0f, 148.0f, 0.27f,
-                    C2D_Color32(118, 137, 145, 255));
-          '''
-          new = '''    draw_text(buffer, "ZAZNACZONY POKOJ", 22.0f, 84.0f, 0.27f,
-                    C2D_Color32(151, 168, 171, 255));
-              draw_text(buffer, room_label(state.selected_room), 22.0f, 98.0f, 0.44f,
-                    C2D_Color32(246, 193, 82, 255));
-              draw_text(buffer, state.message, 22.0f, 118.0f, 0.34f,
-                    C2D_Color32(244, 239, 220, 255));
-              char status[128];
-              std::snprintf(status, sizeof(status),
-                            "POKOJE %d/6  ZALOGA %d  ZAPAS %d/30",
-                            state.rooms, state.workers, state.stored);
-              draw_text(buffer, status, 22.0f, 140.0f, 0.31f,
-                    C2D_Color32(113, 196, 151, 255));
-              draw_text(buffer, "D-Pad: pokoj  Pad: kamera  L/R: zoom",
-                    22.0f, 154.0f, 0.29f,
-                    C2D_Color32(136, 154, 160, 255));
-          '''
-          if old not in text:
-              raise SystemExit('missing bottom UI block')
-          text = text.replace(old, new)
+
+          block_start = text.index('    draw_text(buffer, "BIEZACE ZADANIE"')
+          block_end = text.index('    const int focused_id', block_start)
+          replacement = '''    draw_text(buffer, "ZAZNACZONY POKOJ", 22.0f, 84.0f, 0.27f,
+              C2D_Color32(151, 168, 171, 255));
+    draw_text(buffer, room_label(state.selected_room), 22.0f, 98.0f, 0.44f,
+              C2D_Color32(246, 193, 82, 255));
+    draw_text(buffer, state.message, 22.0f, 118.0f, 0.34f,
+              C2D_Color32(244, 239, 220, 255));
+    char status[128];
+    std::snprintf(status, sizeof(status),
+                  "POKOJE %d/6  ZALOGA %d  ZAPAS %d/30",
+                  state.rooms, state.workers, state.stored);
+    draw_text(buffer, status, 22.0f, 140.0f, 0.31f,
+              C2D_Color32(113, 196, 151, 255));
+    draw_text(buffer, "D-Pad: pokoj  Pad: kamera  L/R: zoom",
+              22.0f, 154.0f, 0.29f,
+              C2D_Color32(136, 154, 160, 255));
+'''
+          text = text[:block_start] + replacement + text[block_end:]
           main.write_text(text)
           PY
           bash scripts/run_host_tests.sh
