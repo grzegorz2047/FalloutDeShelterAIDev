@@ -232,7 +232,11 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     C3D_TexBind(0, &material_texture_);
     C3D_TexEnv* env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
-    C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, GPU_PRIMARY_COLOR, 0);
+    C3D_TexEnvSrc(env,
+                  C3D_Both,
+                  GPU_TEXTURE0,
+                  GPU_PRIMARY_COLOR,
+                  GPU_PRIMARY_COLOR);
     C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
 
     const float zoom = camera.zoom();
