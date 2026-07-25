@@ -5,34 +5,20 @@ namespace {
 
 constexpr std::size_t kVerticesPerBox = 36;
 constexpr float kByteToUnit = 1.0f / 255.0f;
-constexpr float kMaterialWidth = 0.25f;
+constexpr float kMaterialWidth =
+    1.0f / static_cast<float>(assets::kGeneratedMaterialTileCount);
 constexpr float kUvInset = 0.002f;
 
-struct Position3D {
-    float x;
-    float y;
-    float z;
-};
-
-struct Normal3D {
-    float x;
-    float y;
-    float z;
-};
+struct Position3D { float x; float y; float z; };
+struct Normal3D { float x; float y; float z; };
 
 Vertex3D make_vertex(const Position3D& position,
                      float u,
                      float v,
                      const Normal3D& normal,
                      std::uint32_t color) noexcept {
-    return {position.x,
-            position.y,
-            position.z,
-            u,
-            v,
-            normal.x,
-            normal.y,
-            normal.z,
+    return {position.x, position.y, position.z, u, v,
+            normal.x, normal.y, normal.z,
             static_cast<float>(color & 0xffu) * kByteToUnit,
             static_cast<float>((color >> 8) & 0xffu) * kByteToUnit,
             static_cast<float>((color >> 16) & 0xffu) * kByteToUnit,
