@@ -6,6 +6,8 @@
 ; Constants
 .constf constants(0.0, 1.0, 0.55, 0.45)
 .constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
+; Scale the compact multifloor cutaway 1.8x around world centre (200, 120).
+.constf framing(1.8, -160.0, -96.0, 0.0)
 .alias ones constants.yyyy
 
 ; Outputs
@@ -20,8 +22,12 @@
 .alias inclr v3
 
 .proc main
-    ; Homogeneous world position
-    mov r0.xyz, inpos
+    ; Homogeneous world position with a closer default composition.
+    mov r5, framing
+    mul r0.xy, inpos, r5.x
+    add r0.x, r0.x, r5.y
+    add r0.y, r0.y, r5.z
+    mov r0.z, inpos.z
     mov r0.w, ones
 
     ; Camera/view transform
