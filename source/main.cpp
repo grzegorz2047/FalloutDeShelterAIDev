@@ -176,6 +176,7 @@ void draw_bottom(C3D_RenderTarget* bottom,
     draw_button(buffer, 88.0f, 2, focused_id, true, "PRACA");
     draw_button(buffer, 164.0f, 3, focused_id, state.stored > 0, "ODBIERZ");
     draw_button(buffer, 240.0f, 4, focused_id, true, "ZAPIS");
+    C2D_Flush();
 }
 
 InputFrame read_ui_input(u32 down, u32 held, u32 up) {
@@ -225,8 +226,8 @@ int main() {
         return 3;
     }
 
-    // SceneMesh3D owns a 4096-vertex fixed buffer (~64 KiB). Keep the renderer in
-    // static storage instead of overflowing the small 3DS main-thread stack.
+    // SceneMesh3D owns a 4096-vertex fixed buffer. Keep the renderer in static
+    // storage instead of overflowing the small 3DS main-thread stack.
     static Scene3DRenderer scene_renderer;
     const bool renderer_ready = scene_renderer.initialize();
 
