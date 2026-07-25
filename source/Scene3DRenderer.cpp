@@ -28,23 +28,23 @@ u32 room_accent(int room_index) noexcept {
 
 u32 room_back_wall(int room_index) noexcept {
     switch ((room_index % 6 + 6) % 6) {
-        case 0: return rgba(223, 204, 147);
-        case 1: return rgba(173, 220, 164);
-        case 2: return rgba(164, 211, 229);
-        case 3: return rgba(224, 188, 151);
-        case 4: return rgba(210, 196, 156);
-        default: return rgba(207, 196, 176);
+        case 0: return rgba(91, 78, 48);
+        case 1: return rgba(48, 82, 54);
+        case 2: return rgba(43, 70, 86);
+        case 3: return rgba(83, 58, 43);
+        case 4: return rgba(73, 66, 46);
+        default: return rgba(68, 55, 51);
     }
 }
 
 u32 room_floor(int room_index) noexcept {
     switch ((room_index % 6 + 6) % 6) {
-        case 0: return rgba(183, 157, 88);
-        case 1: return rgba(104, 164, 102);
-        case 2: return rgba(94, 154, 181);
-        case 3: return rgba(151, 113, 82);
-        case 4: return rgba(153, 139, 101);
-        default: return rgba(155, 130, 107);
+        case 0: return rgba(126, 99, 44);
+        case 1: return rgba(58, 113, 65);
+        case 2: return rgba(52, 103, 128);
+        case 3: return rgba(112, 72, 48);
+        case 4: return rgba(105, 91, 55);
+        default: return rgba(108, 75, 61);
     }
 }
 
@@ -75,10 +75,10 @@ void append_selection_corners(SceneMesh3D& mesh, float x, float y) noexcept {
 }
 
 void append_unbuilt_cavity(SceneMesh3D& mesh, float x, float y) noexcept {
-    const u32 rock = rgba(111, 104, 101);
-    const u32 cut_rock = rgba(132, 124, 119);
-    const u32 brace = rgba(151, 162, 160);
-    const u32 warning = rgba(225, 166, 64);
+    const u32 rock = rgba(72, 68, 67);
+    const u32 cut_rock = rgba(88, 83, 80);
+    const u32 brace = rgba(101, 111, 110);
+    const u32 warning = rgba(177, 119, 38);
 
     mesh.append_box({x + 4.0f, y + 4.0f, -19.0f,
                      layout::kRoomWidth - 8.0f, layout::kRoomHeight - 8.0f, 5.0f,
@@ -97,12 +97,10 @@ void append_unbuilt_cavity(SceneMesh3D& mesh, float x, float y) noexcept {
                      layout::kRoomWidth - 16.0f, 7.0f, 8.0f,
                      brace, assets::GeneratedMaterial::Grating});
 
-    for (int marker = 0; marker < 3; ++marker) {
-        mesh.append_box({x + 36.0f + marker * 20.0f, y + 24.0f, -5.0f,
-                         12.0f, 12.0f, 4.0f,
-                         marker == 1 ? warning : rgba(105, 113, 113),
-                         assets::GeneratedMaterial::ControlPanel});
-    }
+    mesh.append_box({x + 46.0f, y + 24.0f, -5.0f, 40.0f, 5.0f, 4.0f,
+                     warning, assets::GeneratedMaterial::Grating});
+    mesh.append_box({x + 63.0f, y + 16.0f, -5.0f, 6.0f, 22.0f, 4.0f,
+                     warning, assets::GeneratedMaterial::Grating});
 }
 
 }  // namespace
@@ -198,7 +196,7 @@ void Scene3DRenderer::append_room(float x,
         return;
     }
 
-    const u32 frame = selected ? rgba(238, 224, 157) : rgba(214, 228, 222);
+    const u32 frame = selected ? rgba(246, 216, 104) : rgba(145, 161, 158);
     const u32 accent = room_accent(room_index);
     const u32 wall = room_back_wall(room_index);
     const u32 floor = room_floor(room_index);
