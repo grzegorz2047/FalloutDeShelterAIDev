@@ -1,6 +1,7 @@
 #include "render/Scene3DRenderer.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 
 #include "assets/GeneratedMaterialAtlas.hpp"
@@ -9,10 +10,10 @@
 namespace deep_shelter::render {
 namespace {
 
-constexpr int kColumns = 12;
-constexpr int kRows = 7;
-constexpr float kCellWidth = 72.0f;
-constexpr float kCellHeight = 52.0f;
+constexpr float kRoomWidth = 72.0f;
+constexpr float kRoomHeight = 52.0f;
+constexpr std::array<float, 6> kRoomX{{36.0f, 252.0f, 36.0f, 252.0f, 36.0f, 252.0f}};
+constexpr std::array<float, 6> kRoomY{{42.0f, 42.0f, 104.0f, 104.0f, 166.0f, 166.0f}};
 
 constexpr u32 rgba(u8 r, u8 g, u8 b, u8 a = 255) noexcept {
     return static_cast<u32>(r) | (static_cast<u32>(g) << 8) |
@@ -21,12 +22,12 @@ constexpr u32 rgba(u8 r, u8 g, u8 b, u8 a = 255) noexcept {
 
 u32 room_accent(int room_index) noexcept {
     switch ((room_index % 6 + 6) % 6) {
-        case 0: return rgba(224, 153, 55);
-        case 1: return rgba(89, 181, 104);
-        case 2: return rgba(56, 145, 183);
-        case 3: return rgba(181, 128, 66);
-        case 4: return rgba(189, 143, 73);
-        default: return rgba(89, 136, 139);
+        case 0: return rgba(236, 172, 60);
+        case 1: return rgba(91, 196, 111);
+        case 2: return rgba(70, 164, 212);
+        case 3: return rgba(211, 126, 63);
+        case 4: return rgba(189, 154, 82);
+        default: return rgba(101, 153, 181);
     }
 }
 
@@ -117,42 +118,101 @@ void Scene3DRenderer::append_room(float x,
                                   bool selected,
                                   bool resident,
                                   int stored) noexcept {
-    const u32 frame = selected ? rgba(255, 216, 118) : rgba(185, 201, 198);
-    const u32 steel = rgba(180, 205, 202);
-    const u32 dark = rgba(155, 174, 169);
+    const u32 frame = selected ? rgba(255, 238, 145) : rgba(174, 197, 194);
+    const u32 steel = rgba(169, 195, 193);
+    const u32 dark = rgba(112, 137, 137);
     const u32 accent = room_accent(room_index);
 
     mesh_.append_box({x + 3.0f, y + 3.0f, -18.0f, 66.0f, 46.0f, 4.0f, steel,
                       assets::GeneratedMaterial::Steel});
-    mesh_.append_box({x, y, -14.0f, 72.0f, 4.0f, 18.0f, frame,
+    mesh_.append_box({x, y, -14.0f, kRoomWidth, 4.0f, 18.0f, frame,
                       assets::GeneratedMaterial::Steel});
-    mesh_.append_box({x, y + 48.0f, -14.0f, 72.0f, 4.0f, 18.0f, frame,
+    mesh_.append_box({x, y + 48.0f, -14.0f, kRoomWidth, 4.0f, 18.0f, frame,
                       assets::GeneratedMaterial::Steel});
-    mesh_.append_box({x, y, -14.0f, 4.0f, 52.0f, 18.0f, frame,
+    mesh_.append_box({x, y, -14.0f, 4.0f, kRoomHeight, 18.0f, frame,
                       assets::GeneratedMaterial::Steel});
-    mesh_.append_box({x + 68.0f, y, -14.0f, 4.0f, 52.0f, 18.0f, frame,
+    mesh_.append_box({x + 68.0f, y, -14.0f, 4.0f, kRoomHeight, 18.0f, frame,
                       assets::GeneratedMaterial::Steel});
     mesh_.append_box({x + 4.0f, y + 43.0f, -10.0f, 64.0f, 5.0f, 14.0f, dark,
                       assets::GeneratedMaterial::Grating});
 
-    mesh_.append_box({x + 10.0f, y + 25.0f, -9.0f, 14.0f, 18.0f, 10.0f, accent,
-                      assets::GeneratedMaterial::ControlPanel});
-    mesh_.append_box({x + 29.0f, y + 18.0f, -8.0f, 15.0f, 25.0f, 9.0f,
-                      rgba(190, 217, 211), assets::GeneratedMaterial::Steel});
-    mesh_.append_box({x + 50.0f, y + 29.0f, -7.0f, 11.0f, 14.0f, 8.0f, accent,
-                      assets::GeneratedMaterial::ControlPanel});
+    switch (room_index % 6) {
+        case 0:  // Power generation.
+            mesh_.append_box({x + 9.0f, y + 17.0f, -9.0f, 16.0f, 26.0f, 11.0f,
+                              accent, assets::GeneratedMaterial::ControlPanel});
+            mesh_.append_box({x + 30.0f, y + 12.0f, -8.0f, 11.0f, 31.0f, 10.0f,
+                              rgba(208, 218, 190), assets::GeneratedMaterial::Steel});
+            mesh_.append_box({x + 47.0f, y + 21.0f, -7.0f, 14.0f, 22.0f, 9.0f,
+                              accent, assets::GeneratedMaterial::ControlPanel});
+            break;
+        case 1:  // Hydroponics.
+            mesh_.append_box({x + 8.0f, y + 33.0f, -8.0f, 54.0f, 9.0f, 9.0f,
+                              rgba(114, 190, 106), assets::GeneratedMaterial::Grating});
+            mesh_.append_box({x + 13.0f, y + 23.0f, -5.0f, 8.0f, 10.0f, 5.0f,
+                              accent, assets::GeneratedMaterial::ControlPanel});
+            mesh_.append_box({x + 31.0f, y + 20.0f, -5.0f, 9.0f, 13.0f, 5.0f,
+                              accent, assets::GeneratedMaterial::ControlPanel});
+            mesh_.append_box({x + 50.0f, y + 25.0f, -5.0f, 7.0f, 8.0f, 5.0f,
+                              accent, assets::GeneratedMaterial::ControlPanel});
+            break;
+        case 2:  // Water treatment.
+            mesh_.append_box({x + 9.0f, y + 16.0f, -9.0f, 17.0f, 27.0f, 11.0f,
+                              accent, assets::GeneratedMaterial::Steel});
+            mesh_.append_box({x + 29.0f, y + 24.0f, -8.0f, 29.0f, 19.0f, 10.0f,
+                              rgba(102, 183, 211), assets::GeneratedMaterial::ControlPanel});
+            mesh_.append_box({x + 33.0f, y + 10.0f, -5.0f, 4.0f, 14.0f, 5.0f,
+                              rgba(173, 219, 230), assets::GeneratedMaterial::Steel});
+            break;
+        case 3:  // Workshop.
+            mesh_.append_box({x + 8.0f, y + 31.0f, -8.0f, 55.0f, 12.0f, 10.0f,
+                              rgba(149, 124, 91), assets::GeneratedMaterial::Grating});
+            mesh_.append_box({x + 13.0f, y + 18.0f, -6.0f, 17.0f, 13.0f, 7.0f,
+                              accent, assets::GeneratedMaterial::ControlPanel});
+            mesh_.append_box({x + 42.0f, y + 15.0f, -7.0f, 13.0f, 16.0f, 8.0f,
+                              rgba(207, 176, 117), assets::GeneratedMaterial::Steel});
+            break;
+        case 4:  // Storage.
+            for (int crate = 0; crate < 3; ++crate) {
+                mesh_.append_box({x + 9.0f + crate * 18.0f, y + 27.0f, -7.0f,
+                                  14.0f, 16.0f, 8.0f, accent,
+                                  assets::GeneratedMaterial::Steel});
+            }
+            mesh_.append_box({x + 14.0f, y + 15.0f, -5.0f, 44.0f, 5.0f, 5.0f,
+                              rgba(185, 198, 177), assets::GeneratedMaterial::Grating});
+            break;
+        default:  // Living quarters.
+            mesh_.append_box({x + 8.0f, y + 30.0f, -7.0f, 25.0f, 13.0f, 8.0f,
+                              rgba(167, 132, 103), assets::GeneratedMaterial::Steel});
+            mesh_.append_box({x + 40.0f, y + 31.0f, -7.0f, 22.0f, 12.0f, 8.0f,
+                              accent, assets::GeneratedMaterial::Steel});
+            mesh_.append_box({x + 30.0f, y + 17.0f, -5.0f, 10.0f, 8.0f, 6.0f,
+                              rgba(229, 208, 157), assets::GeneratedMaterial::ControlPanel});
+            break;
+    }
 
     const float fill = std::clamp(static_cast<float>(stored) / 30.0f, 0.0f, 1.0f);
     if (fill > 0.0f) {
-        mesh_.append_box({x + 8.0f, y + 7.0f, -5.0f, 52.0f * fill, 3.0f, 5.0f,
+        mesh_.append_box({x + 8.0f, y + 7.0f, -4.0f, 52.0f * fill, 3.0f, 5.0f,
                           rgba(110, 255, 171), assets::GeneratedMaterial::Grating});
     }
 
     if (resident) {
-        mesh_.append_box({x + 45.0f, y + 24.0f, -3.0f, 7.0f, 9.0f, 6.0f,
+        mesh_.append_box({x + 45.0f, y + 22.0f, -3.0f, 7.0f, 9.0f, 6.0f,
                           rgba(255, 220, 183), assets::GeneratedMaterial::Steel});
-        mesh_.append_box({x + 43.0f, y + 33.0f, -3.0f, 11.0f, 10.0f, 6.0f,
+        mesh_.append_box({x + 43.0f, y + 31.0f, -3.0f, 11.0f, 12.0f, 6.0f,
                           rgba(95, 196, 210), assets::GeneratedMaterial::Steel});
+    }
+
+    if (selected) {
+        constexpr u32 highlight = 0xFFF2A4FF;
+        mesh_.append_box({x - 3.0f, y - 3.0f, -2.0f, 78.0f, 3.0f, 4.0f,
+                          highlight, assets::GeneratedMaterial::Steel});
+        mesh_.append_box({x - 3.0f, y + 52.0f, -2.0f, 78.0f, 3.0f, 4.0f,
+                          highlight, assets::GeneratedMaterial::Steel});
+        mesh_.append_box({x - 3.0f, y, -2.0f, 3.0f, 52.0f, 4.0f,
+                          highlight, assets::GeneratedMaterial::Steel});
+        mesh_.append_box({x + 72.0f, y, -2.0f, 3.0f, 52.0f, 4.0f,
+                          highlight, assets::GeneratedMaterial::Steel});
     }
 }
 
@@ -161,40 +221,46 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                                   RenderStats& stats) noexcept {
     mesh_.clear();
 
-    for (int row = 0; row < kRows; ++row) {
-        for (int column = 0; column < kColumns; ++column) {
-            const float x = static_cast<float>(column) * kCellWidth;
-            const float y = static_cast<float>(row) * kCellHeight;
-            if (!camera.visible(x, y, kCellWidth, kCellHeight)) {
-                ++stats.culled_cells;
-                continue;
-            }
-            ++stats.visible_cells;
+    // Carved rock backdrop around the three-floor cutaway.
+    mesh_.append_box({8.0f, 24.0f, -28.0f, 384.0f, 210.0f, 10.0f,
+                      rgba(147, 139, 132), assets::GeneratedMaterial::Rock});
 
-            const bool excavated = row >= 2 && column >= 1 && column <= 10;
-            const int room_index = column - 2;
-            const bool room = row == 4 && room_index >= 0 && room_index < state.rooms;
+    // Excavated central cavity and structural floor bands.
+    mesh_.append_box({24.0f, 32.0f, -18.0f, 352.0f, 194.0f, 5.0f,
+                      rgba(106, 129, 129), assets::GeneratedMaterial::Steel});
+    for (int floor = 0; floor < 3; ++floor) {
+        const float y = 90.0f + floor * 62.0f;
+        mesh_.append_box({24.0f, y, -10.0f, 352.0f, 6.0f, 12.0f,
+                          rgba(146, 164, 159), assets::GeneratedMaterial::Grating});
+    }
 
-            if (room) {
-                append_room(x,
-                            y,
-                            room_index,
-                            room_index == state.selected_room,
-                            state.resident_assigned && room_index == state.selected_room,
-                            room_index == state.selected_room ? state.stored : 0);
-            } else if (excavated) {
-                mesh_.append_box({x + 2.0f, y + 2.0f, -18.0f, 68.0f, 48.0f, 6.0f,
-                                  rgba(130, 156, 151), assets::GeneratedMaterial::Rock});
-                mesh_.append_box({x + 2.0f, y + 46.0f, -10.0f, 68.0f, 4.0f, 10.0f,
-                                  rgba(155, 170, 164), assets::GeneratedMaterial::Grating});
-            } else {
-                const u8 shade = static_cast<u8>(145 + ((column * 13 + row * 7) & 31));
-                mesh_.append_box({x, y, -24.0f, 70.0f, 50.0f, 22.0f,
-                                  rgba(shade, static_cast<u8>(shade - 8),
-                                       static_cast<u8>(shade - 3)),
-                                  assets::GeneratedMaterial::Rock});
-            }
+    // Central elevator shaft, doors and illuminated cabin marker.
+    mesh_.append_box({182.0f, 36.0f, -14.0f, 36.0f, 184.0f, 18.0f,
+                      rgba(138, 151, 151), assets::GeneratedMaterial::Steel});
+    for (int floor = 0; floor < 3; ++floor) {
+        const float door_y = 50.0f + floor * 62.0f;
+        mesh_.append_box({187.0f, door_y, -5.0f, 26.0f, 31.0f, 7.0f,
+                          floor == 1 ? rgba(228, 148, 68) : rgba(102, 126, 128),
+                          assets::GeneratedMaterial::ControlPanel});
+        mesh_.append_box({194.0f, door_y + 6.0f, -2.0f, 12.0f, 18.0f, 4.0f,
+                          rgba(192, 206, 199), assets::GeneratedMaterial::Steel});
+    }
+
+    const int visible_rooms = std::clamp(std::max(state.rooms, 3), 0, 6);
+    for (int room_index = 0; room_index < visible_rooms; ++room_index) {
+        const float x = kRoomX[room_index];
+        const float y = kRoomY[room_index];
+        if (!camera.visible(x, y, kRoomWidth, kRoomHeight)) {
+            ++stats.culled_cells;
+            continue;
         }
+        ++stats.visible_cells;
+        append_room(x,
+                    y,
+                    room_index,
+                    room_index == state.selected_room,
+                    state.resident_assigned && room_index == state.selected_room,
+                    room_index == state.selected_room ? state.stored : 0);
     }
 
     stats.draw_calls = mesh_.vertex_count() > 0 ? 1 : 0;
