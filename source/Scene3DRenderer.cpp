@@ -38,12 +38,16 @@ Scene3DRenderer::~Scene3DRenderer() {
 bool Scene3DRenderer::initialize() noexcept {
     if (initialized_) return true;
 
+    shutdown();
+
     shader_dvlb_ = DVLB_ParseFile(reinterpret_cast<u32*>(scene3d_v_shbin),
                                   scene3d_v_shbin_size);
     if (shader_dvlb_ == nullptr) return false;
 
     shaderProgramInit(&program_);
+    program_initialized_ = true;
     shaderProgramSetVsh(&program_, &shader_dvlb_->DVLE[0]);
+
     projection_uniform_ = shaderInstanceGetUniformLocation(program_.vertexShader, "projection");
     model_view_uniform_ = shaderInstanceGetUniformLocation(program_.vertexShader, "modelView");
     if (projection_uniform_ < 0 || model_view_uniform_ < 0) {
@@ -63,18 +67,26 @@ bool Scene3DRenderer::initialize() noexcept {
 }
 
 void Scene3DRenderer::shutdown() noexcept {
+    initialized_ = false;
+
     if (vertex_buffer_ != nullptr) {
         linearFree(vertex_buffer_);
         vertex_buffer_ = nullptr;
     }
-    shaderProgramFree(&program_);
+
+    if (program_initialized_) {
+        shaderProgramFree(&program_);
+        program_initialized_ = false;
+        program_ = {};
+    }
+
     if (shader_dvlb_ != nullptr) {
         DVLB_Free(shader_dvlb_);
         shader_dvlb_ = nullptr;
     }
+
     projection_uniform_ = -1;
     model_view_uniform_ = -1;
-    initialized_ = false;
 }
 
 void Scene3DRenderer::append_room(float x,
@@ -88,7 +100,6 @@ void Scene3DRenderer::append_room(float x,
     const u32 dark = rgba(31, 39, 43);
     const u32 accent = room_accent(room_index);
 
-    // Open-front room shell. Back wall, floor, ceiling and side columns all have real depth.
     mesh_.append_box({x + 3.0f, y + 3.0f, -18.0f, 66.0f, 46.0f, 4.0f, steel});
     mesh_.append_box({x, y, -14.0f, 72.0f, 4.0f, 18.0f, frame});
     mesh_.append_box({x, y + 48.0f, -14.0f, 72.0f, 4.0f, 18.0f, frame});
@@ -96,7 +107,6 @@ void Scene3DRenderer::append_room(float x,
     mesh_.append_box({x + 68.0f, y, -14.0f, 4.0f, 52.0f, 18.0f, frame});
     mesh_.append_box({x + 4.0f, y + 43.0f, -10.0f, 64.0f, 5.0f, 14.0f, dark});
 
-    // Equipment is deliberately placed in front of the rear wall but behind the open facade.
     mesh_.append_box({x + 10.0f, y + 25.0f, -9.0f, 14.0f, 18.0f, 10.0f, accent});
     mesh_.append_box({x + 29.0f, y + 18.0f, -8.0f, 15.0f, 25.0f, 9.0f, accent});
     mesh_.append_box({x + 50.0f, y + 29.0f, -7.0f, 11.0f, 14.0f, 8.0f, accent});
@@ -179,11 +189,16 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     C3D_AttrInfo* attr_info = C3D_GetAttrInfo();
     AttrInfo_Init(attr_info);
     AttrInfo_AddLoader(attr_info, 0, GPU_FLOAT, 3);
-    AttrInfo_AddLoader(attr_info, 1, GPU_UNSIGNED_BYTE, 4);
+    AttrInfo_AddLoader(attr_info, 1, GPU_FLOAT, 4);
 
     C3D_BufInfo* buf_info = C3D_GetBufInfo();
     BufInfo_Init(buf_info);
     BufInfo_Add(buf_info, vertex_buffer_, sizeof(Vertex3D), 2, 0x10);
+
+    C3D_TexEnv* env = C3D_GetTexEnv(0);
+    C3D_TexEnvInit(env);
+    C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR);
+    C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
 
     const float zoom = camera.zoom();
     const float center_x = camera.x() + 200.0f / zoom;

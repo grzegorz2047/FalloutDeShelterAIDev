@@ -49,6 +49,7 @@ private:
     Vertex3D* vertex_buffer_ = nullptr;
     int projection_uniform_ = -1;
     int model_view_uniform_ = -1;
+    bool program_initialized_ = false;
     bool initialized_ = false;
 };
 
