@@ -14,6 +14,7 @@ int main() {
     assert(!ui.add({4, {0, 0, 20, 20}, true, true, true, {}, {}}));
 
     assert(ui.focused_id() && *ui.focused_id() == 1);
+    assert(!ui.pressed_id());
     auto action = ui.route({false, false, false, true});
     assert(action && action->type == UiActionType::FocusChanged && action->control_id == 2);
     action = ui.route({false, true});
@@ -30,6 +31,7 @@ int main() {
     press.touch_y = 20;
     action = ui.route(press);
     assert(!action); // touch captures the frame; A cannot double-activate
+    assert(ui.pressed_id() && *ui.pressed_id() == 1);
 
     InputFrame release;
     release.touch_released = true;
@@ -37,17 +39,20 @@ int main() {
     release.touch_y = 20;
     action = ui.route(release);
     assert(action && action->type == UiActionType::Activate && action->control_id == 1);
+    assert(!ui.pressed_id());
 
     press = {};
     press.touch_pressed = true;
     press.touch_x = 120;
     press.touch_y = 20;
     assert(!ui.route(press));
+    assert(ui.pressed_id() && *ui.pressed_id() == 2);
     release = {};
     release.touch_released = true;
     release.touch_x = 300;
     release.touch_y = 220;
     assert(!ui.route(release)); // release outside cancels activation
+    assert(!ui.pressed_id());
 
     press.touch_x = 120;
     press.touch_y = 20;
@@ -58,16 +63,19 @@ int main() {
     drag.touch_y = 55;
     action = ui.route(drag);
     assert(action && action->type == UiActionType::Drag && action->control_id == 2);
+    assert(ui.pressed_id() && *ui.pressed_id() == 2);
 
     InputFrame cancel;
     cancel.cancel = true;
     action = ui.route(cancel);
     assert(action && action->type == UiActionType::Cancel);
+    assert(!ui.pressed_id());
 
     assert(ui.focus(2));
     assert(ui.remove(2));
     assert(ui.focused_id() && *ui.focused_id() == 1);
     ui.clear();
     assert(!ui.focused_id());
+    assert(!ui.pressed_id());
     return 0;
 }

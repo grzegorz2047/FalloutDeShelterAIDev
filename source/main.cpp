@@ -4,8 +4,10 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "assets/GeneratedUiAtlas.hpp"
 #include "render/Scene3DRenderer.hpp"
 #include "render/ShelterCamera.hpp"
+#include "ui/GeneratedUiRenderer.hpp"
 #include "ui/UiFramework.hpp"
 
 namespace {
@@ -31,10 +33,13 @@ struct DemoState {
     char message[96] = "Zbuduj pokoj, przypisz mieszkanca i odbierz zasoby.";
 };
 
+using deep_shelter::assets::UiButtonState;
+using deep_shelter::assets::UiIcon;
 using deep_shelter::render::RenderStats;
 using deep_shelter::render::Scene3DRenderer;
 using deep_shelter::render::ShelterCamera;
 using deep_shelter::render::ShelterSceneState3D;
+using deep_shelter::ui::GeneratedUiRenderer;
 using deep_shelter::ui::InputFrame;
 using deep_shelter::ui::UiActionType;
 using deep_shelter::ui::UiTree;
@@ -122,39 +127,57 @@ void draw_text(C2D_TextBuf buffer,
     C2D_DrawText(&text, C2D_WithColor, x, y, 0.5f, scale, scale, color);
 }
 
-void draw_button(C2D_TextBuf buffer,
+void draw_resource(GeneratedUiRenderer& atlas,
+                   C2D_TextBuf buffer,
+                   UiIcon icon,
+                   int value,
+                   float x) {
+    char text[16];
+    std::snprintf(text, sizeof(text), "%d", value);
+    atlas.draw_icon(icon, x, 32.0f, 14.0f, 14.0f, 0.35f);
+    draw_text(buffer, text, x + 17.0f, 34.0f, 0.40f,
+              C2D_Color32(230, 238, 240, 255));
+}
+
+void draw_button(GeneratedUiRenderer& atlas,
+                 C2D_TextBuf buffer,
                  float x,
                  int id,
                  int focused_id,
+                 int pressed_id,
                  bool enabled,
+                 UiIcon icon,
                  const char* label) {
-    const bool focused = id == focused_id;
-    const u32 color = !enabled ? C2D_Color32(70, 70, 70, 255)
-                               : focused ? C2D_Color32(232, 177, 67, 255)
-                                         : C2D_Color32(55, 104, 111, 255);
-    C2D_DrawRectSolid(x, 160.0f, 0.1f, 66.0f, 34.0f, color);
-    draw_text(buffer, label, x + 5.0f, 169.0f, 0.42f, C2D_Color32(255, 255, 255, 255));
+    UiButtonState state = UiButtonState::Normal;
+    if (!enabled) {
+        state = UiButtonState::Disabled;
+    } else if (id == pressed_id) {
+        state = UiButtonState::Pressed;
+    } else if (id == focused_id) {
+        state = UiButtonState::Focused;
+    }
+    atlas.draw_button_frame(state, x, 160.0f, 66.0f, 34.0f);
+    atlas.draw_icon(icon, x + 5.0f, 169.0f, 16.0f, 16.0f, 0.35f);
+    draw_text(buffer, label, x + 23.0f, 169.0f, 0.36f,
+              enabled ? C2D_Color32(255, 255, 255, 255)
+                      : C2D_Color32(145, 151, 153, 255));
 }
 
 void draw_bottom(C3D_RenderTarget* bottom,
                  C2D_TextBuf buffer,
                  const DemoState& state,
-                 const UiTree& ui) {
+                 const UiTree& ui,
+                 GeneratedUiRenderer& atlas) {
     C2D_Prepare();
     C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
     C2D_SceneBegin(bottom);
 
-    char status[160];
-    std::snprintf(status,
-                  sizeof(status),
-                  "Kredyty %d   Energia %d   Jedzenie %d   Woda %d",
-                  state.credits,
-                  state.power,
-                  state.food,
-                  state.water);
     draw_text(buffer, "DEEP SHELTER 3D - PRAWDZIWE 2.5D", 12.0f, 10.0f, 0.50f,
               C2D_Color32(246, 211, 111, 255));
-    draw_text(buffer, status, 12.0f, 34.0f, 0.43f, C2D_Color32(230, 238, 240, 255));
+    draw_resource(atlas, buffer, UiIcon::Credits, state.credits, 12.0f);
+    draw_resource(atlas, buffer, UiIcon::Power, state.power, 86.0f);
+    draw_resource(atlas, buffer, UiIcon::Food, state.food, 154.0f);
+    draw_resource(atlas, buffer, UiIcon::Water, state.water, 222.0f);
 
     char room[128];
     std::snprintf(room,
@@ -164,7 +187,8 @@ void draw_bottom(C3D_RenderTarget* bottom,
                   state.workers,
                   state.stored);
     draw_text(buffer, room, 12.0f, 56.0f, 0.43f, C2D_Color32(159, 222, 184, 255));
-    draw_text(buffer, state.message, 12.0f, 84.0f, 0.39f, C2D_Color32(255, 255, 255, 255));
+    draw_text(buffer, state.message, 12.0f, 84.0f, 0.39f,
+              C2D_Color32(255, 255, 255, 255));
     draw_text(buffer,
               "Circle Pad: przesun  L/R: zoom  Suwak 3D: stereoskopia",
               12.0f,
@@ -173,10 +197,15 @@ void draw_bottom(C3D_RenderTarget* bottom,
               C2D_Color32(183, 202, 216, 255));
 
     const int focused_id = ui.focused_id().value_or(-1);
-    draw_button(buffer, 12.0f, 1, focused_id, true, "BUDUJ");
-    draw_button(buffer, 88.0f, 2, focused_id, true, "PRACA");
-    draw_button(buffer, 164.0f, 3, focused_id, state.stored > 0, "ODBIERZ");
-    draw_button(buffer, 240.0f, 4, focused_id, true, "ZAPIS");
+    const int pressed_id = ui.pressed_id().value_or(-1);
+    draw_button(atlas, buffer, 12.0f, 1, focused_id, pressed_id, true,
+                UiIcon::Build, "BUDUJ");
+    draw_button(atlas, buffer, 88.0f, 2, focused_id, pressed_id, true,
+                UiIcon::Work, "PRACA");
+    draw_button(atlas, buffer, 164.0f, 3, focused_id, pressed_id, state.stored > 0,
+                UiIcon::Collect, "ODBIERZ");
+    draw_button(atlas, buffer, 240.0f, 4, focused_id, pressed_id, true,
+                UiIcon::Save, "ZAPIS");
     C2D_Flush();
 }
 
@@ -227,10 +256,12 @@ int main() {
         return 3;
     }
 
-    // SceneMesh3D owns a 4096-vertex fixed buffer. Keep the renderer in static
-    // storage instead of overflowing the small 3DS main-thread stack.
+    // Both renderers own large fixed buffers. Keep them in static storage rather
+    // than using the small 3DS main-thread stack.
     static Scene3DRenderer scene_renderer;
+    static GeneratedUiRenderer ui_renderer;
     const bool renderer_ready = scene_renderer.initialize();
+    const bool ui_atlas_ready = ui_renderer.initialize();
 
     ShelterCamera camera({kColumns * kCellWidth, kRows * kCellHeight}, {400.0f, 240.0f});
     UiTree ui;
@@ -243,6 +274,8 @@ int main() {
     DemoState state;
     if (!renderer_ready) {
         set_message(state, "Blad renderera 3D. Uruchomiono bezpieczny tryb diagnostyczny.");
+    } else if (!ui_atlas_ready) {
+        set_message(state, "Blad atlasu UI. Uruchomiono interfejs awaryjny.");
     }
 
     while (aptMainLoop()) {
@@ -265,7 +298,7 @@ int main() {
                        "Brak gotowej produkcji.",
                        "Przypisz mieszkanca i poczekaj.");
 
-        if (down & KEY_A) build_room(state);
+        // X/Y/B remain direct shortcuts. A activates the focused UI control once.
         if (down & KEY_X) assign_resident(state);
         if (down & KEY_Y) collect(state);
         if (down & KEY_B) {
@@ -302,7 +335,16 @@ int main() {
         C2D_TextBufClear(text_buffer);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        draw_bottom(bottom, text_buffer, state, ui);
+        if (ui_atlas_ready) {
+            draw_bottom(bottom, text_buffer, state, ui, ui_renderer);
+        } else {
+            C2D_Prepare();
+            C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
+            C2D_SceneBegin(bottom);
+            draw_text(text_buffer, state.message, 12.0f, 84.0f, 0.39f,
+                      C2D_Color32(255, 255, 255, 255));
+            C2D_Flush();
+        }
         if (renderer_ready) {
             scene_renderer.draw(top_left, camera, -stereo, scene_state, left_stats);
             scene_renderer.draw(top_right, camera, stereo, scene_state, right_stats);
@@ -315,6 +357,7 @@ int main() {
         C3D_FrameEnd(0);
     }
 
+    ui_renderer.shutdown();
     scene_renderer.shutdown();
     C2D_TextBufDelete(text_buffer);
     C2D_Fini();
