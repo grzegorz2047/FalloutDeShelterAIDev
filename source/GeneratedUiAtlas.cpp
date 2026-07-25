@@ -1,9 +1,14 @@
 #include "assets/GeneratedUiAtlas.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace deep_shelter::assets {
 namespace {
+
+// Startup-only scratch storage. Keeping this outside the main-thread stack avoids
+// the same class of ARM11 stack overflow previously fixed in the scene renderer.
+alignas(16) std::uint32_t ui_atlas_scratch[kGeneratedUiAtlasPixelCount];
 
 constexpr std::uint32_t rgba(std::uint8_t r,
                              std::uint8_t g,
@@ -183,12 +188,11 @@ void decode_generated_ui_atlas(std::uint32_t* output,
 void decode_generated_ui_atlas_tiled(std::uint32_t* output,
                                      std::size_t output_pixels) noexcept {
     if (output == nullptr || output_pixels < kGeneratedUiAtlasPixelCount) return;
-    std::uint32_t linear[kGeneratedUiAtlasPixelCount];
-    render_linear(linear);
+    render_linear(ui_atlas_scratch);
     for (std::size_t y = 0; y < kGeneratedUiAtlasHeight; ++y) {
         for (std::size_t x = 0; x < kGeneratedUiAtlasWidth; ++x) {
             output[pica_tile_offset(x, y)] =
-                linear[y * kGeneratedUiAtlasWidth + x];
+                ui_atlas_scratch[y * kGeneratedUiAtlasWidth + x];
         }
     }
 }
