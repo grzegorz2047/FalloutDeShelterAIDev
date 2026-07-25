@@ -19,15 +19,22 @@ jobs:
         with:
           ref: agent/large-dense-rooms
       - name: Apply reviewed game-design pass
+        run: python3 .github/scripts/apply_game_design_pass.py
+      - name: Verify reviewed game-design diff
         shell: bash
         run: |
-          python3 .github/scripts/apply_game_design_pass.py
+          git diff --check
+          git diff --exit-code -- .github/workflows/build.yml
+      - name: Run host tests for reviewed pass
+        shell: bash
+        run: bash scripts/run_host_tests.sh
+      - name: Commit reviewed game-design pass
+        shell: bash
+        run: |
           if git diff --quiet -- source/Scene3DRenderer.cpp source/main.cpp; then
             echo "reviewed pass already applied"
             exit 0
           fi
-          bash scripts/run_host_tests.sh
-          git diff --check
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add source/Scene3DRenderer.cpp source/main.cpp
