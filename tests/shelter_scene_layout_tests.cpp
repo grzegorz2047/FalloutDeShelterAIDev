@@ -12,6 +12,10 @@ int main() {
     static_assert(kElevatorWidth < kRoomWidth * 0.30f);
     static_assert(kBackdropWidth / kWorldWidth >= 0.95f);
     static_assert(kBackdropHeight / kWorldHeight >= 0.90f);
+    static_assert(kUnbuiltRoomBoxes <
+                  kActiveRoomBaseBoxes + kMaxRoomSignatureBoxes);
+    static_assert(kWorstCaseSceneBoxes <= kMaxSceneBoxes);
+    static_assert(kWorstCaseSceneVertices <= kMaxSceneVertices);
 
     for (std::size_t room = 0; room < kRoomX.size(); ++room) {
         assert(kRoomX[room] >= 0.0f);
