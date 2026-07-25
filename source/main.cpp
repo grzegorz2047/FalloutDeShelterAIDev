@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "assets/GeneratedUiAtlas.hpp"
+#include "render/GlowPassRenderer.hpp"
 #include "render/Scene3DRenderer.hpp"
 #include "render/ShelterCamera.hpp"
 #include "ui/GeneratedUiRenderer.hpp"
@@ -35,6 +36,7 @@ struct DemoState {
 
 using deep_shelter::assets::UiButtonState;
 using deep_shelter::assets::UiIcon;
+using deep_shelter::render::GlowPassRenderer;
 using deep_shelter::render::RenderStats;
 using deep_shelter::render::Scene3DRenderer;
 using deep_shelter::render::ShelterCamera;
@@ -287,11 +289,13 @@ int main() {
         return 3;
     }
 
-    // Both renderers own large fixed buffers. Keep them in static storage rather
-    // than using the small 3DS main-thread stack.
+    // Renderers own fixed buffers. Keep them in static storage rather than using
+    // the small 3DS main-thread stack.
     static Scene3DRenderer scene_renderer;
+    static GlowPassRenderer glow_renderer;
     static GeneratedUiRenderer ui_renderer;
     const bool renderer_ready = scene_renderer.initialize();
+    const bool glow_ready = glow_renderer.initialize();
     const bool ui_atlas_ready = ui_renderer.initialize();
 
     ShelterCamera camera({kColumns * kCellWidth, kRows * kCellHeight}, {400.0f, 240.0f});
@@ -305,6 +309,8 @@ int main() {
     DemoState state;
     if (!renderer_ready) {
         set_message(state, "Blad renderera 3D. Uruchomiono bezpieczny tryb diagnostyczny.");
+    } else if (!glow_ready) {
+        set_message(state, "Blad passu swiatla. Gra dziala bez poswiaty.");
     } else if (!ui_atlas_ready) {
         set_message(state, "Blad atlasu UI. Uruchomiono interfejs awaryjny.");
     }
@@ -329,7 +335,6 @@ int main() {
                        "Brak gotowej produkcji.",
                        "Przypisz mieszkanca i poczekaj.");
 
-        // X/Y/B remain direct shortcuts. A activates the focused UI control once.
         if (down & KEY_X) assign_resident(state);
         if (down & KEY_Y) collect(state);
         if (down & KEY_B) {
@@ -378,7 +383,9 @@ int main() {
         }
         if (renderer_ready) {
             scene_renderer.draw(top_left, camera, -stereo, scene_state, left_stats);
+            if (glow_ready) glow_renderer.draw(top_left, camera, -stereo, scene_state);
             scene_renderer.draw(top_right, camera, stereo, scene_state, right_stats);
+            if (glow_ready) glow_renderer.draw(top_right, camera, stereo, scene_state);
         } else {
             C3D_RenderTargetClear(top_left, C3D_CLEAR_COLOR, kRendererDiagnosticColor, 0);
             C3D_FrameDrawOn(top_left);
@@ -389,6 +396,7 @@ int main() {
     }
 
     ui_renderer.shutdown();
+    glow_renderer.shutdown();
     scene_renderer.shutdown();
     C2D_TextBufDelete(text_buffer);
     C2D_Fini();
