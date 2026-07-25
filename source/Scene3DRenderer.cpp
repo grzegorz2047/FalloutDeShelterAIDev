@@ -364,7 +364,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
     const u32 rock_edge = rgba(78, 61, 48);
     const u32 steel_dark = rgba(35, 43, 44);
     const u32 steel_mid = rgba(61, 72, 72);
-    const u32 warm_light = rgba(206, 139, 48);
     mesh_.append_box({layout::kBackdropX, layout::kBackdropY, -34.0f,
                       layout::kBackdropWidth, layout::kBackdropHeight, 8.0f,
                       deep_void, assets::GeneratedMaterial::Rock});
