@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends curl jq xvfb libfuse2 libgl1 libopengl0 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+          sudo apt-get install -y --no-install-recommends curl jq xvfb x11-utils imagemagick libfuse2 libgl1 libopengl0 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
       - name: Download Azahar
         shell: bash
         run: |
@@ -86,22 +86,54 @@ jobs:
       - name: Install CIA
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           mkdir -p azahar-home
           HOME="$PWD/azahar-home" timeout 90s xvfb-run -a ./squashfs-root/AppRun --install "$PWD/dist/DeepShelter3D.cia" 2>&1 | tee azahar-cia-install.log
-      - name: Launch 3DSX
+          grep -q "Installed CIA successfully" azahar-cia-install.log
+      - name: Launch 3DSX and verify first frame
         shell: bash
         run: |
-          set +e
-          HOME="$PWD/azahar-home" timeout 15s xvfb-run -a ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1
-          status=$?
-          test $status -eq 124
-      - name: Upload Azahar logs
+          set -euo pipefail
+          Xvfb :99 -screen 0 1280x720x24 > azahar-xvfb.log 2>&1 &
+          xvfb_pid=$!
+          trap 'kill $xvfb_pid 2>/dev/null || true' EXIT
+          export DISPLAY=:99
+          sleep 2
+
+          HOME="$PWD/azahar-home" ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
+          azahar_pid=$!
+          trap 'kill $azahar_pid $xvfb_pid 2>/dev/null || true' EXIT
+
+          for second in $(seq 1 18); do
+            sleep 1
+            if ! kill -0 "$azahar_pid" 2>/dev/null; then
+              wait "$azahar_pid" || true
+              echo "Azahar exited before producing a stable frame." >&2
+              cat azahar-3dsx-launch.log >&2
+              exit 1
+            fi
+          done
+
+          import -display :99 -window root azahar-first-frame.png
+          test -s azahar-first-frame.png
+          colors=$(identify -format '%k' azahar-first-frame.png)
+          test "$colors" -gt 16
+
+          if grep -Eq "X11 connection broke|terminate called|Fatal|Unhandled exception" azahar-3dsx-launch.log; then
+            cat azahar-3dsx-launch.log >&2
+            exit 1
+          fi
+
+          kill "$azahar_pid" 2>/dev/null || true
+          wait "$azahar_pid" 2>/dev/null || true
+      - name: Upload Azahar logs and first frame
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DeepShelter3D-Azahar-logs
-          path: azahar-*.log
+          path: |
+            azahar-*.log
+            azahar-first-frame.png
           if-no-files-found: warn
 
   publish-release:
