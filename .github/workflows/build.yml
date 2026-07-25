@@ -139,6 +139,13 @@ jobs:
           done
 
           timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
+          if grep -Eq "An exception occurred|ExceptionRaised|NoExecuteFault" azahar-window-tree.log azahar-3dsx-launch.log; then
+            echo "Azahar reported an emulated application exception." >&2
+            cat azahar-window-tree.log >&2
+            cat azahar-3dsx-launch.log >&2
+            exit 1
+          fi
+
           timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
           test -s azahar-first-frame.png
           colors=$(timeout 10s identify -format '%k' azahar-first-frame.png)
