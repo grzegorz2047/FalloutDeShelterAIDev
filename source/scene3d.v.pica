@@ -4,8 +4,9 @@
 .fvec projection[4], modelView[4]
 
 ; Constants
-; Bright display profile for the small 3DS screen: no face drops below 76% tint.
-.constf constants(0.0, 1.0, 0.76, 0.24)
+; Bright display profile for the small 3DS screen: subtle directional form,
+; but no face drops below 88% of its authored room colour.
+.constf constants(0.0, 1.0, 0.88, 0.12)
 .constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
 ; Scale the compact multifloor cutaway 1.8x around world centre (200, 120).
 .constf framing(1.8, -160.0, -96.0, 0.0)
