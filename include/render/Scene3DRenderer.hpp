@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include <3ds.h>
 #include <citro3d.h>
 
@@ -49,6 +51,8 @@ private:
     DVLB_s* shader_dvlb_ = nullptr;
     Vertex3D* vertex_buffer_ = nullptr;
     C3D_Tex material_texture_{};
+    std::size_t structure_vertex_end_ = 0;
+    std::size_t prop_vertex_end_ = 0;
     int projection_uniform_ = -1;
     int model_view_uniform_ = -1;
     bool program_initialized_ = false;
