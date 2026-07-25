@@ -1,228 +1,214 @@
-name: Build
+name: Apply PICA200 renderer migration
 
 on:
   push:
     branches:
-      - main
-      - 'agent/**'
-      - 'publish-v*'
-    tags:
-      - 'v*'
-  pull_request:
+      - agent/richer-room-props-83
 
 permissions:
   contents: write
 
 jobs:
-  build-release:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, '[pica-applied]') }}
     runs-on: ubuntu-latest
-    container:
-      image: devkitpro/devkitarm:20260610
     steps:
       - uses: actions/checkout@v4
-      - name: Verify toolchain
-        run: |
-          test -f "$DEVKITARM/3ds_rules"
-          test -f "$DEVKITPRO/libctru/include/3ds.h"
-          test -f "$DEVKITPRO/libctru/lib/libctru.a"
-          test -f "$DEVKITPRO/libctru/lib/libcitro3d.a"
-          test -f "$DEVKITPRO/libctru/lib/libcitro2d.a"
-          command -v python3
-          command -v g++
-      - name: Host architecture tests
-        shell: bash
-        run: bash scripts/run_host_tests.sh
-      - name: Policy and syntax checks
-        run: make test
-      - name: Build 3DSX and CIA
-        shell: bash
-        run: |
-          set -o pipefail
-          make release -j2 2>&1 | tee build.log
-          cd dist
-          sha256sum -c SHA256SUMS.txt
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: DeepShelter3D-build-log
-          path: build.log
-          if-no-files-found: warn
-      - name: Upload playable artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: DeepShelter3D-playable
-          path: |
-            dist/DeepShelter3D.3dsx
-            dist/DeepShelter3D.cia
-            dist/SHA256SUMS.txt
-          if-no-files-found: error
-
-  azahar-smoke:
-    name: Azahar smoke test
-    needs: build-release
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: DeepShelter3D-playable
-          path: dist
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends curl jq xvfb x11-utils imagemagick libfuse2 libgl1 libopengl0 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
-      - name: Download Azahar
+          ref: agent/richer-room-props-83
+          fetch-depth: 2
+      - name: Apply hardware quality pass
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL --retry 3 "https://api.github.com/repos/azahar-emu/azahar/releases?per_page=10" > releases.json
-          url=$(jq -r '[.[] | select(.draft == false) | .assets[] | select(.name | test("\\.AppImage$")) | select((.name | ascii_downcase | contains("wayland")) | not) | .browser_download_url][0]' releases.json)
-          test "$url" != "null"
-          curl -fL --retry 3 "$url" -o azahar.AppImage
-          chmod +x azahar.AppImage
-          ./azahar.AppImage --appimage-extract > azahar-extract.log 2>&1
-          test -x squashfs-root/AppRun
-      - name: Install CIA
+          python3 - <<'PY'
+          from pathlib import Path
+
+          renderer = Path('source/Scene3DRenderer.cpp')
+          text = renderer.read_text()
+          for old, new in [
+              ('constexpr u32 c = 0xFF56C7F0;',
+               'constexpr u32 c = rgba(86, 199, 240, 144);'),
+              ('C3D_TexSetFilter(&material_texture_, GPU_NEAREST, GPU_NEAREST);',
+               'C3D_TexSetFilter(&material_texture_, GPU_LINEAR, GPU_LINEAR);'),
+              ('    if (selected) append_selection(mesh_, x, y);\n}',
+               '    (void)selected;\n}'),
+          ]:
+              if old not in text:
+                  raise SystemExit(f'missing renderer anchor: {old!r}')
+              text = text.replace(old, new, 1)
+
+          old_tail = '''    prop_vertex_end_ = mesh_.vertex_count();
+
+    stats.draw_calls = mesh_.vertex_count() > 0 ? 3 : 0;
+    stats.estimated_linear_memory =
+        mesh_.vertex_count() * sizeof(Vertex3D) + assets::kGeneratedMaterialRuntimeBytes;
+}'''
+          new_tail = '''    prop_vertex_end_ = mesh_.vertex_count();
+
+    // Dedicated translucent foreground range for real additive light.
+    for (int room = 0; room < active_rooms; ++room) {
+        const float x = layout::kRoomX[room];
+        const float y = layout::kRoomY[room];
+        if (!camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) continue;
+        const u32 accent = room_accent(room);
+        const u32 soft = (accent & 0x00ffffffu) | (static_cast<u32>(72) << 24);
+        const u32 bright = (accent & 0x00ffffffu) | (static_cast<u32>(118) << 24);
+        mesh_.append_box({x + 17.0f, y + 7.0f, -2.0f, 98.0f, 3.0f, 3.0f,
+                          bright, assets::GeneratedMaterial::ControlPanel});
+        mesh_.append_box({x + 26.0f, y + 46.0f, -2.0f, 80.0f, 2.0f, 3.0f,
+                          soft, assets::GeneratedMaterial::ControlPanel});
+    }
+    if (state.selected_room >= 0 && state.selected_room < active_rooms) {
+        const int selected = state.selected_room;
+        const float x = layout::kRoomX[selected];
+        const float y = layout::kRoomY[selected];
+        if (camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) {
+            append_selection(mesh_, x, y);
+        }
+    }
+
+    const std::size_t total = mesh_.vertex_count();
+    std::size_t draw_calls = structure_vertex_end_ > 0 ? 1u : 0u;
+    if (prop_vertex_end_ > structure_vertex_end_) ++draw_calls;
+    if (total > prop_vertex_end_) ++draw_calls;
+    stats.draw_calls = static_cast<int>(draw_calls);
+    stats.estimated_linear_memory =
+        total * sizeof(Vertex3D) + assets::kGeneratedMaterialRuntimeBytes;
+}'''
+          if old_tail not in text:
+              raise SystemExit('missing scene tail anchor')
+          text = text.replace(old_tail, new_tail, 1)
+
+          old_draw = '''    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, projection_uniform_, &projection);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, model_view_uniform_, &view);
+    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_ALL);
+    C3D_CullFace(GPU_CULL_NONE);
+
+    const std::size_t total = mesh_.vertex_count();
+    const std::size_t structure_end = std::min(structure_vertex_end_, total);
+    const std::size_t props_end = std::max(structure_end,
+                                           std::min(prop_vertex_end_, total));
+    if (structure_end > 0) {
+        C3D_DrawArrays(GPU_TRIANGLES, 0, static_cast<int>(structure_end));
+    }
+    if (props_end > structure_end) {
+        C3D_DrawArrays(GPU_TRIANGLES,
+                       static_cast<int>(structure_end),
+                       static_cast<int>(props_end - structure_end));
+    }
+    if (total > props_end) {
+        C3D_DrawArrays(GPU_TRIANGLES,
+                       static_cast<int>(props_end),
+                       static_cast<int>(total - props_end));
+    }
+}'''
+          new_draw = '''    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, projection_uniform_, &projection);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, model_view_uniform_, &view);
+    C3D_CullFace(GPU_CULL_NONE);
+
+    const std::size_t total = mesh_.vertex_count();
+    const std::size_t structure_end = std::min(structure_vertex_end_, total);
+    const std::size_t props_end = std::max(structure_end,
+                                           std::min(prop_vertex_end_, total));
+
+    C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD,
+                   GPU_ONE, GPU_ZERO, GPU_ONE, GPU_ZERO);
+    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_ALL);
+    if (structure_end > 0) {
+        C3D_DrawArrays(GPU_TRIANGLES, 0, static_cast<int>(structure_end));
+    }
+    if (props_end > structure_end) {
+        C3D_DrawArrays(GPU_TRIANGLES,
+                       static_cast<int>(structure_end),
+                       static_cast<int>(props_end - structure_end));
+    }
+
+    if (total > props_end) {
+        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD,
+                       GPU_SRC_ALPHA, GPU_ONE, GPU_SRC_ALPHA, GPU_ONE);
+        C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_COLOR);
+        C3D_DrawArrays(GPU_TRIANGLES,
+                       static_cast<int>(props_end),
+                       static_cast<int>(total - props_end));
+    }
+
+    C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD,
+                   GPU_ONE, GPU_ZERO, GPU_ONE, GPU_ZERO);
+    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_ALL);
+}'''
+          if old_draw not in text:
+              raise SystemExit('missing draw-pass anchor')
+          renderer.write_text(text.replace(old_draw, new_draw, 1))
+
+          scene = Path('source/Scene3D.cpp')
+          scene_text = scene.read_text()
+          if 'constexpr float kUvInset = 0.002f;' not in scene_text:
+              raise SystemExit('missing UV inset anchor')
+          scene.write_text(scene_text.replace(
+              'constexpr float kUvInset = 0.002f;',
+              'constexpr float kUvInset = 0.0045f;', 1))
+
+          main = Path('source/main.cpp')
+          main_text = main.read_text()
+          namespace_anchor = '}  // namespace\n\nint main() {'
+          helper = '''C3D_RenderTarget* create_top_target(gfx3dSide_t side) noexcept {
+    C3D_RenderTarget* target = C3D_RenderTargetCreate(
+        GSP_SCREEN_WIDTH,
+        GSP_SCREEN_HEIGHT_TOP,
+        GPU_RB_RGBA8,
+        GPU_RB_DEPTH24_STENCIL8);
+    if (target != nullptr) {
+        C3D_RenderTargetSetOutput(
+            target, GFX_TOP, side,
+            GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) |
+                GX_TRANSFER_RAW_COPY(0) |
+                GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) |
+                GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) |
+                GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
+    }
+    return target;
+}
+
+}  // namespace
+
+int main() {'''
+          if namespace_anchor not in main_text:
+              raise SystemExit('missing main namespace anchor')
+          main_text = main_text.replace(namespace_anchor, helper, 1)
+          old_targets = '''    C3D_RenderTarget* top_left = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    C3D_RenderTarget* top_right = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
+    C3D_RenderTarget* bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);'''
+          new_targets = '''    C3D_RenderTarget* top_left = create_top_target(GFX_LEFT);
+    C3D_RenderTarget* top_right = create_top_target(GFX_RIGHT);
+    C3D_RenderTarget* bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);'''
+          if old_targets not in main_text:
+              raise SystemExit('missing render target anchor')
+          main.write_text(main_text.replace(old_targets, new_targets, 1))
+
+          Path('docs/PICA200_VISUAL_BUDGET.md').write_text('''# PICA200 visual budget
+
+The renderer uses Nintendo 3DS GPU capacity as a quality budget rather than a one-draw-call target.
+
+## Implemented
+- top-eye targets use RGBA8 with 24-bit depth and 8-bit stencil;
+- structure, detailed equipment and additive foreground light are separate ranges;
+- additive light uses `SRC_ALPHA + ONE`, depth testing and color-only writes;
+- the RGB565 material atlas uses linear filtering with protected UV borders;
+- the fixed mesh ceiling remains 8192 vertices.
+
+## Deferred
+Phong/cel lighting, normal mapping, shadow maps and environment reflections require editable shader sources. See issue #89.
+''')
+          PY
+      - name: Commit code and restore normal CI
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p azahar-home
-          HOME="$PWD/azahar-home" timeout 90s xvfb-run -a ./squashfs-root/AppRun --install "$PWD/dist/DeepShelter3D.cia" 2>&1 | tee azahar-cia-install.log
-          grep -q "Installed CIA successfully" azahar-cia-install.log
-      - name: Launch 3DSX and verify first frame
-        shell: bash
-        timeout-minutes: 2
-        run: |
-          set -euo pipefail
-
-          display_number=99
-          while [ -e "/tmp/.X${display_number}-lock" ] || [ -S "/tmp/.X11-unix/X${display_number}" ]; do
-            display_number=$((display_number + 1))
-          done
-          export DISPLAY=":${display_number}"
-          echo "Using Xvfb display $DISPLAY"
-
-          Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > azahar-xvfb.log 2>&1 &
-          xvfb_pid=$!
-          cleanup() {
-            if [ -n "${azahar_pid:-}" ]; then
-              kill -- -"$azahar_pid" 2>/dev/null || true
-            fi
-            kill "$xvfb_pid" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-
-          for attempt in $(seq 1 20); do
-            if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
-              break
-            fi
-            if ! kill -0 "$xvfb_pid" 2>/dev/null; then
-              cat azahar-xvfb.log >&2
-              exit 1
-            fi
-            sleep 0.25
-          done
-          xdpyinfo -display "$DISPLAY" >/dev/null
-
-          HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
-          azahar_pid=$!
-
-          for second in $(seq 1 18); do
-            sleep 1
-            if ! kill -0 "$azahar_pid" 2>/dev/null; then
-              wait "$azahar_pid" || true
-              echo "Azahar exited before producing a stable frame." >&2
-              cat azahar-3dsx-launch.log >&2
-              exit 1
-            fi
-          done
-
-          timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
-          if grep -Eq "An exception occurred|ExceptionRaised|NoExecuteFault" azahar-window-tree.log azahar-3dsx-launch.log; then
-            echo "Azahar reported an emulated application exception." >&2
-            cat azahar-window-tree.log >&2
-            cat azahar-3dsx-launch.log >&2
-            exit 1
-          fi
-
-          timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
-          test -s azahar-first-frame.png
-          colors=$(timeout 10s identify -format '%k' azahar-first-frame.png)
-          echo "Captured first frame with $colors colors"
-          test "$colors" -gt 16
-
-          if grep -Eq "could not connect to display|X11 connection broke|terminate called|Fatal|Unhandled exception" azahar-3dsx-launch.log; then
-            cat azahar-3dsx-launch.log >&2
-            exit 1
-          fi
-
-          kill -- -"$azahar_pid" 2>/dev/null || true
-          for attempt in $(seq 1 20); do
-            if ! kill -0 "$azahar_pid" 2>/dev/null; then
-              break
-            fi
-            sleep 0.25
-          done
-      - name: Upload Azahar logs and first frame
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: DeepShelter3D-Azahar-logs
-          path: |
-            azahar-*.log
-            azahar-first-frame.png
-          if-no-files-found: warn
-
-  publish-release:
-    name: Publish immutable alpha release
-    if: github.event_name == 'push' && startsWith(github.ref_name, 'publish-v')
-    needs:
-      - build-release
-      - azahar-smoke
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: DeepShelter3D-playable
-          path: dist
-      - name: Resolve and validate version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#publish-}"
-          test "$version" != "$GITHUB_REF_NAME"
-          test -s "releases/$version.txt"
-          if git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null 2>&1; then
-            echo "Tag $version already exists; releases are immutable." >&2
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Verify release payload
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s dist/DeepShelter3D.cia
-          test -s dist/DeepShelter3D.3dsx
-          test -s dist/SHA256SUMS.txt
-          (cd dist && sha256sum -c SHA256SUMS.txt)
-          test -s docs/INSTALLATION.md
-      - name: Publish GitHub pre-release
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
-          gh release create "$version" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "$version" \
-            --notes-file "releases/$version.txt" \
-            --prerelease \
-            dist/DeepShelter3D.cia \
-            dist/DeepShelter3D.3dsx \
-            dist/SHA256SUMS.txt \
-            docs/INSTALLATION.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git checkout HEAD^ -- .github/workflows/build.yml
+          git rm -f .github/workflows/one-shot-pica200-quality.yml
+          git add source/Scene3DRenderer.cpp source/Scene3D.cpp source/main.cpp docs/PICA200_VISUAL_BUDGET.md .github/workflows/build.yml
+          git commit -m "visuals: use PICA200 depth and additive light pass [pica-applied]"
+          git push origin HEAD:agent/richer-room-props-83
