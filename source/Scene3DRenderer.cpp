@@ -12,7 +12,6 @@ constexpr int kColumns = 12;
 constexpr int kRows = 7;
 constexpr float kCellWidth = 72.0f;
 constexpr float kCellHeight = 52.0f;
-constexpr u32 kRendererDiagnosticColor = 0x9A2020FF;
 
 constexpr u32 rgba(u8 r, u8 g, u8 b, u8 a = 255) noexcept {
     return static_cast<u32>(r) | (static_cast<u32>(g) << 8) |
@@ -39,26 +38,28 @@ Scene3DRenderer::~Scene3DRenderer() {
 bool Scene3DRenderer::initialize() noexcept {
     if (initialized_) return true;
 
+    shutdown();
+
     shader_dvlb_ = DVLB_ParseFile(reinterpret_cast<u32*>(scene3d_v_shbin),
                                   scene3d_v_shbin_size);
-    if (shader_dvlb_ == nullptr) {
-        return true;
-    }
+    if (shader_dvlb_ == nullptr) return false;
 
     shaderProgramInit(&program_);
+    program_initialized_ = true;
     shaderProgramSetVsh(&program_, &shader_dvlb_->DVLE[0]);
+
     projection_uniform_ = shaderInstanceGetUniformLocation(program_.vertexShader, "projection");
     model_view_uniform_ = shaderInstanceGetUniformLocation(program_.vertexShader, "modelView");
     if (projection_uniform_ < 0 || model_view_uniform_ < 0) {
         shutdown();
-        return true;
+        return false;
     }
 
     vertex_buffer_ = static_cast<Vertex3D*>(
         linearAlloc(sizeof(Vertex3D) * SceneMesh3D::kMaxVertices));
     if (vertex_buffer_ == nullptr) {
         shutdown();
-        return true;
+        return false;
     }
 
     initialized_ = true;
@@ -66,18 +67,26 @@ bool Scene3DRenderer::initialize() noexcept {
 }
 
 void Scene3DRenderer::shutdown() noexcept {
+    initialized_ = false;
+
     if (vertex_buffer_ != nullptr) {
         linearFree(vertex_buffer_);
         vertex_buffer_ = nullptr;
     }
-    shaderProgramFree(&program_);
+
+    if (program_initialized_) {
+        shaderProgramFree(&program_);
+        program_initialized_ = false;
+        program_ = {};
+    }
+
     if (shader_dvlb_ != nullptr) {
         DVLB_Free(shader_dvlb_);
         shader_dvlb_ = nullptr;
     }
+
     projection_uniform_ = -1;
     model_view_uniform_ = -1;
-    initialized_ = false;
 }
 
 void Scene3DRenderer::append_room(float x,
@@ -165,13 +174,7 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
                            float stereo_eye,
                            const ShelterSceneState3D& state,
                            RenderStats& stats) noexcept {
-    if (target == nullptr) return;
-
-    if (!initialized_) {
-        C3D_RenderTargetClear(target, C3D_CLEAR_COLOR, kRendererDiagnosticColor, 0);
-        C3D_FrameDrawOn(target);
-        return;
-    }
+    if (!initialized_ || target == nullptr) return;
 
     build_scene(camera, state, stats);
     if (mesh_.vertex_count() == 0) return;
