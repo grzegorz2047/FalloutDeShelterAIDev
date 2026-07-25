@@ -65,6 +65,11 @@ std::optional<int> UiTree::focused_id() const noexcept {
     return controls_[*focused_].id;
 }
 
+std::optional<int> UiTree::pressed_id() const noexcept {
+    if (!captured_ || *captured_ >= controls_.size()) return std::nullopt;
+    return controls_[*captured_].id;
+}
+
 std::optional<Control> UiTree::control(int id) const {
     const auto index = index_of(id);
     if (!index) return std::nullopt;
