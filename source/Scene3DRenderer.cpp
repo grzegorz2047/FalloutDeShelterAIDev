@@ -355,35 +355,73 @@ void Scene3DRenderer::append_room(float x,
 }
 
 void Scene3DRenderer::build_scene(const ShelterCamera& camera,
-                                  const ShelterSceneState3D& state,
-                                  RenderStats& stats) noexcept {
+                                          const ShelterSceneState3D& state,
+                                          RenderStats& stats) noexcept {
     mesh_.clear();
 
-    mesh_.append_box({layout::kBackdropX, layout::kBackdropY, -28.0f,
-                      layout::kBackdropWidth, layout::kBackdropHeight, 9.0f,
-                      rgba(50, 43, 39), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({12.0f, 16.0f, -18.0f, 376.0f, 208.0f, 5.0f,
-                      rgba(31, 38, 39), assets::GeneratedMaterial::Steel});
+    const u32 deep_void = rgba(13, 14, 14);
+    const u32 rock_dark = rgba(34, 29, 26);
+    const u32 rock_mid = rgba(54, 45, 38);
+    const u32 rock_edge = rgba(78, 61, 48);
+    const u32 steel_dark = rgba(35, 43, 44);
+    const u32 steel_mid = rgba(61, 72, 72);
+    const u32 warm_light = rgba(206, 139, 48);
+
+    mesh_.append_box({layout::kBackdropX, layout::kBackdropY, -34.0f,
+                      layout::kBackdropWidth, layout::kBackdropHeight, 8.0f,
+                      deep_void, assets::GeneratedMaterial::Rock});
+
+    mesh_.append_box({2.0f, 8.0f, -29.0f, 26.0f, 72.0f, 18.0f,
+                      rock_mid, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({0.0f, 72.0f, -25.0f, 35.0f, 83.0f, 14.0f,
+                      rock_dark, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({5.0f, 149.0f, -31.0f, 25.0f, 82.0f, 20.0f,
+                      rock_edge, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({371.0f, 5.0f, -27.0f, 29.0f, 67.0f, 16.0f,
+                      rock_edge, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({365.0f, 66.0f, -31.0f, 35.0f, 92.0f, 20.0f,
+                      rock_dark, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({374.0f, 151.0f, -26.0f, 26.0f, 81.0f, 15.0f,
+                      rock_mid, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({22.0f, 5.0f, -28.0f, 118.0f, 22.0f, 17.0f,
+                      rock_dark, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({132.0f, 1.0f, -31.0f, 139.0f, 18.0f, 20.0f,
+                      rock_edge, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({263.0f, 7.0f, -27.0f, 116.0f, 23.0f, 16.0f,
+                      rock_mid, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({18.0f, 218.0f, -30.0f, 151.0f, 19.0f, 19.0f,
+                      rock_edge, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({160.0f, 221.0f, -26.0f, 128.0f, 16.0f, 15.0f,
+                      rock_dark, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({278.0f, 216.0f, -31.0f, 104.0f, 22.0f, 20.0f,
+                      rock_mid, assets::GeneratedMaterial::Rock});
 
     for (int floor_index = 0; floor_index < 3; ++floor_index) {
         const float y = layout::kRoomY[floor_index * 2] + layout::kRoomHeight;
-        mesh_.append_box({12.0f, y, -9.0f, 376.0f, 4.0f, 10.0f,
-                          rgba(68, 75, 72), assets::GeneratedMaterial::Grating});
+        mesh_.append_box({28.0f, y - 1.0f, -10.0f, 157.0f, 6.0f, 13.0f,
+                          floor_index == 2 ? rock_edge : steel_dark,
+                          assets::GeneratedMaterial::Grating});
+        mesh_.append_box({215.0f, y - 1.0f, -10.0f, 157.0f, 6.0f, 13.0f,
+                          floor_index == 0 ? rock_mid : steel_dark,
+                          assets::GeneratedMaterial::Grating});
     }
 
-    mesh_.append_box({layout::kElevatorX, layout::kElevatorY, -14.0f,
-                      layout::kElevatorWidth, layout::kElevatorHeight, 17.0f,
-                      rgba(48, 57, 58), assets::GeneratedMaterial::Steel});
+    mesh_.append_box({layout::kElevatorX - 4.0f, layout::kElevatorY - 5.0f, -20.0f,
+                      layout::kElevatorWidth + 8.0f, layout::kElevatorHeight + 10.0f,
+                      8.0f, rock_dark, assets::GeneratedMaterial::Rock});
+    mesh_.append_box({layout::kElevatorX, layout::kElevatorY, -13.0f,
+                      layout::kElevatorWidth, layout::kElevatorHeight, 16.0f,
+                      steel_dark, assets::GeneratedMaterial::Steel});
     for (int floor_index = 0; floor_index < 3; ++floor_index) {
         const float door_y = layout::kRoomY[floor_index * 2] + 9.0f;
         mesh_.append_box({layout::kElevatorX + 4.0f, door_y, -4.0f,
                           layout::kElevatorWidth - 8.0f, 43.0f, 6.0f,
-                          floor_index == 1 ? rgba(188, 119, 41)
-                                           : rgba(58, 72, 73),
+                          floor_index == 1 ? warm_light : steel_mid,
                           assets::GeneratedMaterial::ControlPanel});
         mesh_.append_box({layout::kElevatorX + 10.0f, door_y + 8.0f, -1.0f,
                           layout::kElevatorWidth - 20.0f, 25.0f, 3.0f,
-                          rgba(111, 119, 112), assets::GeneratedMaterial::Steel});
+                          floor_index == 1 ? rgba(236, 184, 82) : rgba(92, 103, 99),
+                          assets::GeneratedMaterial::Steel});
     }
 
     const int active_rooms = std::clamp(state.rooms, 0, 6);
@@ -455,7 +493,7 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
 
     C3D_Mtx projection;
     Mtx_PerspStereoTilt(&projection,
-                        C3D_AngleFromDegrees(24.0f),
+                        C3D_AngleFromDegrees(20.0f),
                         C3D_AspectRatioTop,
                         1.0f,
                         2000.0f,

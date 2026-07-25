@@ -27,7 +27,7 @@ constexpr std::array<float, 6> kRoomY{{22.0f, 22.0f,
                                         90.0f, 90.0f,
                                         158.0f, 158.0f}};
 
-// The current 28-degree perspective and 900-unit camera distance map roughly
+// The current 20-degree perspective and 900-unit camera distance map roughly
 // 0.535 screen pixels per post-framing world unit on the 400x240 upper screen.
 // Keep this estimate centralized so host tests guard the intended room scale.
 constexpr float kEstimatedPixelsPerFramedUnit = 0.535f;
@@ -41,7 +41,7 @@ constexpr float kEstimatedRoomPixelHeight =
 constexpr std::size_t kVerticesPerBox = 36;
 constexpr std::size_t kMaxSceneVertices = 4096;
 constexpr std::size_t kMaxSceneBoxes = kMaxSceneVertices / kVerticesPerBox;
-constexpr std::size_t kStaticSceneBoxes = 12;
+constexpr std::size_t kStaticSceneBoxes = 22;
 constexpr std::size_t kActiveRoomBaseBoxes = 6;
 constexpr std::size_t kMaxRoomSignatureBoxes = 6;
 constexpr std::size_t kUnbuiltRoomBoxes = 8;
