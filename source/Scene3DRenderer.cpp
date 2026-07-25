@@ -223,11 +223,12 @@ void Scene3DRenderer::draw(C3D_RenderTarget* target,
     AttrInfo_Init(attr_info);
     AttrInfo_AddLoader(attr_info, 0, GPU_FLOAT, 3);
     AttrInfo_AddLoader(attr_info, 1, GPU_FLOAT, 2);
-    AttrInfo_AddLoader(attr_info, 2, GPU_FLOAT, 4);
+    AttrInfo_AddLoader(attr_info, 2, GPU_FLOAT, 3);
+    AttrInfo_AddLoader(attr_info, 3, GPU_FLOAT, 4);
 
     C3D_BufInfo* buf_info = C3D_GetBufInfo();
     BufInfo_Init(buf_info);
-    BufInfo_Add(buf_info, vertex_buffer_, sizeof(Vertex3D), 3, 0x210);
+    BufInfo_Add(buf_info, vertex_buffer_, sizeof(Vertex3D), 4, 0x3210);
 
     C3D_TexBind(0, &material_texture_);
     C3D_TexEnv* env = C3D_GetTexEnv(0);
