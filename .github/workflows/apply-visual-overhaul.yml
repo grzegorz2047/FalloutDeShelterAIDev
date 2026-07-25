@@ -1,0 +1,174 @@
+name: Apply visual overhaul
+
+on:
+  push:
+    branches:
+      - agent/large-dense-rooms
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact-source visual overhaul
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main = Path('source/main.cpp')
+          text = main.read_text()
+          start = text.index('void draw_resource(')
+          end = text.index('\nInputFrame read_ui_input', start)
+          replacement = r'''void draw_resource(GeneratedUiRenderer& atlas,
+                             C2D_TextBuf buffer,
+                             UiIcon icon,
+                             int value,
+                             float x,
+                             const char* label,
+                             u32 accent) {
+              char value_text[16];
+              std::snprintf(value_text, sizeof(value_text), "%d", value);
+              C2D_DrawRectSolid(x, 31.0f, 0.20f, 69.0f, 38.0f,
+                                C2D_Color32(24, 38, 45, 255));
+              C2D_DrawRectSolid(x, 31.0f, 0.21f, 3.0f, 38.0f, accent);
+              atlas.draw_icon(icon, x + 8.0f, 39.0f, 18.0f, 18.0f, 0.35f);
+              draw_text(buffer, label, x + 31.0f, 37.0f, 0.28f,
+                        C2D_Color32(137, 155, 163, 255));
+              draw_text(buffer, value_text, x + 31.0f, 50.0f, 0.46f,
+                        C2D_Color32(238, 235, 216, 255));
+          }
+
+          void draw_button(GeneratedUiRenderer& atlas,
+                           C2D_TextBuf buffer,
+                           float x,
+                           int id,
+                           int focused_id,
+                           int pressed_id,
+                           bool enabled,
+                           UiIcon icon,
+                           const char* label) {
+              UiButtonState state = UiButtonState::Normal;
+              if (!enabled) state = UiButtonState::Disabled;
+              else if (id == pressed_id) state = UiButtonState::Pressed;
+              else if (id == focused_id) state = UiButtonState::Focused;
+              const bool focused = enabled && id == focused_id;
+              C2D_DrawRectSolid(x, 184.0f, 0.19f, 70.0f, 42.0f,
+                                focused ? C2D_Color32(111, 75, 31, 255)
+                                        : C2D_Color32(27, 39, 44, 255));
+              C2D_DrawRectSolid(x, 184.0f, 0.20f, 70.0f, 3.0f,
+                                focused ? C2D_Color32(241, 184, 70, 255)
+                                        : C2D_Color32(67, 82, 86, 255));
+              atlas.draw_button_frame(state, x + 2.0f, 186.0f, 66.0f, 38.0f);
+              atlas.draw_icon(icon, x + 8.0f, 195.0f, 18.0f, 18.0f, 0.35f);
+              draw_text(buffer, label, x + 30.0f, 197.0f, 0.34f,
+                        enabled ? C2D_Color32(244, 239, 220, 255)
+                                : C2D_Color32(105, 114, 117, 255));
+          }
+
+          void draw_bottom(C3D_RenderTarget* bottom,
+                           C2D_TextBuf buffer,
+                           const DemoState& state,
+                           const UiTree& ui,
+                           GeneratedUiRenderer& atlas) {
+              C2D_Prepare();
+              C2D_TargetClear(bottom, C2D_Color32(9, 17, 21, 255));
+              C2D_SceneBegin(bottom);
+              C2D_DrawRectSolid(0.0f, 0.0f, 0.10f, 320.0f, 25.0f,
+                                C2D_Color32(20, 31, 36, 255));
+              C2D_DrawRectSolid(0.0f, 24.0f, 0.11f, 320.0f, 2.0f,
+                                C2D_Color32(193, 139, 48, 255));
+              draw_text(buffer, "DEEP SHELTER", 12.0f, 7.0f, 0.47f,
+                        C2D_Color32(244, 204, 105, 255));
+              draw_text(buffer, "SEKTOR 01  //  ONLINE", 174.0f, 9.0f, 0.28f,
+                        C2D_Color32(120, 192, 151, 255));
+              draw_resource(atlas, buffer, UiIcon::Credits, state.credits, 10.0f,
+                            "KREDYTY", C2D_Color32(221, 171, 73, 255));
+              draw_resource(atlas, buffer, UiIcon::Power, state.power, 87.0f,
+                            "ENERGIA", C2D_Color32(232, 151, 56, 255));
+              draw_resource(atlas, buffer, UiIcon::Food, state.food, 164.0f,
+                            "ZYWNOSC", C2D_Color32(95, 172, 103, 255));
+              draw_resource(atlas, buffer, UiIcon::Water, state.water, 241.0f,
+                            "WODA", C2D_Color32(75, 151, 188, 255));
+              C2D_DrawRectSolid(10.0f, 77.0f, 0.15f, 300.0f, 82.0f,
+                                C2D_Color32(18, 29, 34, 255));
+              C2D_DrawRectSolid(10.0f, 77.0f, 0.16f, 4.0f, 82.0f,
+                                C2D_Color32(180, 128, 48, 255));
+              draw_text(buffer, "BIEZACE ZADANIE", 22.0f, 86.0f, 0.29f,
+                        C2D_Color32(166, 181, 181, 255));
+              draw_text(buffer, state.message, 22.0f, 104.0f, 0.38f,
+                        C2D_Color32(244, 239, 220, 255));
+              char status[128];
+              std::snprintf(status, sizeof(status),
+                            "POKOJE %d/6   ZALOGA %d   MAGAZYN %d/30",
+                            state.rooms, state.workers, state.stored);
+              draw_text(buffer, status, 22.0f, 132.0f, 0.32f,
+                        C2D_Color32(113, 196, 151, 255));
+              draw_text(buffer, "Circle Pad: kamera   L/R: zoom   Suwak 3D: glebia",
+                        22.0f, 148.0f, 0.27f,
+                        C2D_Color32(118, 137, 145, 255));
+              const int focused_id = ui.focused_id().value_or(-1);
+              const int pressed_id = ui.pressed_id().value_or(-1);
+              draw_button(atlas, buffer, 10.0f, 1, focused_id, pressed_id, true,
+                          UiIcon::Build, "BUDUJ");
+              draw_button(atlas, buffer, 87.0f, 2, focused_id, pressed_id, true,
+                          UiIcon::Work, "PRACA");
+              draw_button(atlas, buffer, 164.0f, 3, focused_id, pressed_id,
+                          state.stored > 0, UiIcon::Collect, "ODBIERZ");
+              draw_button(atlas, buffer, 241.0f, 4, focused_id, pressed_id, true,
+                          UiIcon::Save, "ZAPIS");
+              C2D_Flush();
+          }
+          '''
+          main.write_text(text[:start] + replacement + text[end:])
+
+          renderer = Path('source/Scene3DRenderer.cpp')
+          text = renderer.read_text()
+          changes = {
+              'constexpr u32 highlight = 0xFFE7A8FF;':
+                  'constexpr u32 highlight = 0xFF4DB7E8;',
+              'const u32 rock = rgba(64, 61, 60);':
+                  'const u32 rock = rgba(42, 38, 36);',
+              'const u32 cut_rock = rgba(78, 74, 72);':
+                  'const u32 cut_rock = rgba(57, 51, 47);',
+              'const u32 brace = rgba(91, 101, 100);':
+                  'const u32 brace = rgba(66, 74, 73);',
+              'const u32 frame = selected ? rgba(246, 216, 104) : rgba(145, 161, 158);':
+                  'const u32 frame = selected ? rgba(201, 145, 48) : rgba(63, 72, 72);',
+              'rgba(231, 225, 180), assets::GeneratedMaterial::Steel':
+                  'rgba(106, 93, 63), assets::GeneratedMaterial::Steel',
+              'rgba(133, 126, 122), assets::GeneratedMaterial::Rock':
+                  'rgba(50, 43, 39), assets::GeneratedMaterial::Rock',
+              'rgba(138, 154, 154), assets::GeneratedMaterial::Steel':
+                  'rgba(31, 38, 39), assets::GeneratedMaterial::Steel',
+              'rgba(171, 184, 178), assets::GeneratedMaterial::Grating':
+                  'rgba(68, 75, 72), assets::GeneratedMaterial::Grating',
+              'rgba(151, 164, 164), assets::GeneratedMaterial::Steel':
+                  'rgba(48, 57, 58), assets::GeneratedMaterial::Steel',
+              'rgba(211, 222, 214), assets::GeneratedMaterial::Steel':
+                  'rgba(111, 119, 112), assets::GeneratedMaterial::Steel',
+              'C3D_RenderTargetClear(target, C3D_CLEAR_ALL, 0x08101AFF, 0);':
+                  'C3D_RenderTargetClear(target, C3D_CLEAR_ALL, 0x070A0CFF, 0);',
+              'C3D_AngleFromDegrees(28.0f)':
+                  'C3D_AngleFromDegrees(24.0f)',
+          }
+          for old, new in changes.items():
+              if old not in text:
+                  raise SystemExit(f'missing renderer token: {old}')
+              text = text.replace(old, new)
+          text = text.replace(
+              'floor_index == 1 ? rgba(239, 158, 74)\n                                           : rgba(120, 145, 147)',
+              'floor_index == 1 ? rgba(188, 119, 41)\n                                           : rgba(58, 72, 73)')
+          renderer.write_text(text)
+          PY
+          bash scripts/run_host_tests.sh
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add source/main.cpp source/Scene3DRenderer.cpp
+          git commit -m "visuals: overhaul shelter presentation and command UI"
+          git push origin HEAD:agent/large-dense-rooms
