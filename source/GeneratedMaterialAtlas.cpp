@@ -1,6 +1,35 @@
 #include "assets/GeneratedMaterialAtlas.hpp"
 
 namespace deep_shelter::assets {
+namespace {
+
+constexpr std::size_t pica_tile_offset(std::size_t x, std::size_t y) noexcept {
+    const std::size_t tile_x = x / 8;
+    const std::size_t tile_y = y / 8;
+    const std::size_t local_x = x & 7u;
+    const std::size_t local_y = y & 7u;
+    const std::size_t tile_index =
+        tile_y * (kGeneratedMaterialAtlasWidth / 8) + tile_x;
+
+    const std::size_t morton =
+        (local_x & 1u) |
+        ((local_y & 1u) << 1u) |
+        ((local_x & 2u) << 1u) |
+        ((local_y & 2u) << 2u) |
+        ((local_x & 4u) << 2u) |
+        ((local_y & 4u) << 3u);
+    return tile_index * 64u + morton;
+}
+
+std::uint16_t decoded_pixel(std::size_t pixel_index) noexcept {
+    const std::uint8_t packed =
+        kGeneratedMaterialIndices4bpp[pixel_index / 2u];
+    const std::uint8_t palette_index =
+        (pixel_index & 1u) == 0u ? packed & 0x0fu : packed >> 4u;
+    return kGeneratedMaterialPaletteRgb565[palette_index];
+}
+
+}  // namespace
 
 // Original textures generated specifically for Deep Shelter 3D, then cropped,
 // downsampled and palette-quantized deterministically for the 3DS.
@@ -48,17 +77,20 @@ alignas(16) const std::uint8_t
 
 void decode_generated_material_atlas(std::uint16_t* output,
                                      std::size_t output_pixels) noexcept {
-    const std::size_t required =
-        kGeneratedMaterialAtlasWidth * kGeneratedMaterialAtlasHeight;
-    if (output == nullptr || output_pixels < required) return;
-    for (std::size_t byte_index = 0;
-         byte_index < kGeneratedMaterialPackedBytes;
-         ++byte_index) {
-        const std::uint8_t packed = kGeneratedMaterialIndices4bpp[byte_index];
-        output[byte_index * 2] =
-            kGeneratedMaterialPaletteRgb565[packed & 0x0fu];
-        output[byte_index * 2 + 1] =
-            kGeneratedMaterialPaletteRgb565[packed >> 4];
+    if (output == nullptr || output_pixels < kGeneratedMaterialPixelCount) return;
+    for (std::size_t pixel = 0; pixel < kGeneratedMaterialPixelCount; ++pixel) {
+        output[pixel] = decoded_pixel(pixel);
+    }
+}
+
+void decode_generated_material_atlas_tiled(std::uint16_t* output,
+                                           std::size_t output_pixels) noexcept {
+    if (output == nullptr || output_pixels < kGeneratedMaterialPixelCount) return;
+    for (std::size_t y = 0; y < kGeneratedMaterialAtlasHeight; ++y) {
+        for (std::size_t x = 0; x < kGeneratedMaterialAtlasWidth; ++x) {
+            const std::size_t source = y * kGeneratedMaterialAtlasWidth + x;
+            output[pica_tile_offset(x, y)] = decoded_pixel(source);
+        }
     }
 }
 
