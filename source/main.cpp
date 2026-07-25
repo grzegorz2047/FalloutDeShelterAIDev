@@ -301,6 +301,7 @@ int main() {
         C2D_TextBufClear(text_buffer);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        draw_bottom(bottom, text_buffer, state, ui);
         if (renderer_ready) {
             scene_renderer.draw(top_left, camera, -stereo, scene_state, left_stats);
             scene_renderer.draw(top_right, camera, stereo, scene_state, right_stats);
@@ -310,7 +311,6 @@ int main() {
             C3D_RenderTargetClear(top_right, C3D_CLEAR_COLOR, kRendererDiagnosticColor, 0);
             C3D_FrameDrawOn(top_right);
         }
-        draw_bottom(bottom, text_buffer, state, ui);
         C3D_FrameEnd(0);
     }
 
