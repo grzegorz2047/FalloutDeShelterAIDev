@@ -74,19 +74,31 @@ void append_selection_corners(SceneMesh3D& mesh, float x, float y) noexcept {
                      highlight, assets::GeneratedMaterial::Steel});
 }
 
-void append_unbuilt_cavity(SceneMesh3D& mesh, float x, float y) noexcept {
-    const u32 rock = rgba(72, 68, 67);
-    const u32 cut_rock = rgba(88, 83, 80);
-    const u32 brace = rgba(101, 111, 110);
-    const u32 warning = rgba(177, 119, 38);
+void append_unbuilt_cavity(SceneMesh3D& mesh,
+                           float x,
+                           float y,
+                           int room_index) noexcept {
+    const u32 rock = rgba(64, 61, 60);
+    const u32 cut_rock = rgba(78, 74, 72);
+    const u32 brace = rgba(91, 101, 100);
+    const u32 blueprint = [&]() noexcept {
+        switch ((room_index % 6 + 6) % 6) {
+            case 0: return rgba(154, 112, 43);
+            case 1: return rgba(67, 128, 76);
+            case 2: return rgba(58, 119, 148);
+            case 3: return rgba(139, 83, 48);
+            case 4: return rgba(125, 103, 57);
+            default: return rgba(111, 79, 69);
+        }
+    }();
 
+    // Five structural boxes keep the module visibly excavated rather than built.
     mesh.append_box({x + 4.0f, y + 4.0f, -19.0f,
                      layout::kRoomWidth - 8.0f, layout::kRoomHeight - 8.0f, 5.0f,
                      rock, assets::GeneratedMaterial::Rock});
     mesh.append_box({x + 8.0f, y + 9.0f, -15.0f,
                      layout::kRoomWidth - 16.0f, layout::kRoomHeight - 19.0f, 3.0f,
                      cut_rock, assets::GeneratedMaterial::Rock});
-
     mesh.append_box({x + 8.0f, y + 7.0f, -9.0f, 6.0f,
                      layout::kRoomHeight - 14.0f, 8.0f,
                      brace, assets::GeneratedMaterial::Steel});
@@ -97,10 +109,58 @@ void append_unbuilt_cavity(SceneMesh3D& mesh, float x, float y) noexcept {
                      layout::kRoomWidth - 16.0f, 7.0f, 8.0f,
                      brace, assets::GeneratedMaterial::Grating});
 
-    mesh.append_box({x + 46.0f, y + 24.0f, -5.0f, 40.0f, 5.0f, 4.0f,
-                     warning, assets::GeneratedMaterial::Grating});
-    mesh.append_box({x + 63.0f, y + 16.0f, -5.0f, 6.0f, 22.0f, 4.0f,
-                     warning, assets::GeneratedMaterial::Grating});
+    // Up to three thin, muted blueprint shapes identify the future room type
+    // without making the cavity look operational. Total remains <= 8 boxes.
+    switch ((room_index % 6 + 6) % 6) {
+        case 0:  // Power: stepped lightning-bolt silhouette.
+            mesh.append_box({x + 42.0f, y + 17.0f, -5.0f, 35.0f, 7.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 58.0f, y + 24.0f, -5.0f, 31.0f, 7.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 48.0f, y + 31.0f, -5.0f, 35.0f, 7.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            break;
+        case 1:  // Hydroponics: long bed with two plant stems.
+            mesh.append_box({x + 28.0f, y + 34.0f, -5.0f, 76.0f, 8.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 47.0f, y + 20.0f, -5.0f, 7.0f, 14.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 79.0f, y + 17.0f, -5.0f, 7.0f, 17.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            break;
+        case 2:  // Water: broad tank and a narrow feed pipe.
+            mesh.append_box({x + 39.0f, y + 17.0f, -5.0f, 52.0f, 25.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 61.0f, y + 11.0f, -5.0f, 8.0f, 6.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 91.0f, y + 28.0f, -5.0f, 17.0f, 7.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            break;
+        case 3:  // Workshop: bench, tool board and press.
+            mesh.append_box({x + 24.0f, y + 34.0f, -5.0f, 82.0f, 8.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 35.0f, y + 18.0f, -5.0f, 35.0f, 10.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 84.0f, y + 17.0f, -5.0f, 12.0f, 17.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            break;
+        case 4:  // Storage: three uneven crate silhouettes.
+            mesh.append_box({x + 31.0f, y + 28.0f, -5.0f, 22.0f, 14.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 57.0f, y + 20.0f, -5.0f, 25.0f, 22.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 86.0f, y + 31.0f, -5.0f, 18.0f, 11.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            break;
+        default:  // Living: bed, headboard and side cabinet.
+            mesh.append_box({x + 32.0f, y + 31.0f, -5.0f, 68.0f, 11.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 32.0f, y + 18.0f, -5.0f, 10.0f, 13.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            mesh.append_box({x + 103.0f, y + 29.0f, -5.0f, 12.0f, 13.0f, 3.0f,
+                             blueprint, assets::GeneratedMaterial::Grating});
+            break;
+    }
 }
 
 }  // namespace
@@ -192,7 +252,7 @@ void Scene3DRenderer::append_room(float x,
                                   bool resident,
                                   int stored) noexcept {
     if (!active) {
-        append_unbuilt_cavity(mesh_, x, y);
+        append_unbuilt_cavity(mesh_, x, y, room_index);
         return;
     }
 
