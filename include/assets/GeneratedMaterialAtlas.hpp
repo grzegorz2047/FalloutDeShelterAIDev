@@ -18,7 +18,7 @@ constexpr std::size_t kGeneratedMaterialRuntimeBytes =
     kGeneratedMaterialPixelCount * sizeof(std::uint16_t);
 
 // Compact 16x16 materials derived from the reference pack attached to issue #85.
-// The production build stores only this generated 4bpp atlas, never loose PNGs.
+// The production build generates only this atlas and never loads loose PNGs.
 enum class GeneratedMaterial : std::uint8_t {
     Rock = 0,
     ExcavatedRock = 1,
@@ -32,8 +32,6 @@ enum class GeneratedMaterial : std::uint8_t {
 
 extern const std::uint16_t
     kGeneratedMaterialPaletteRgb565[kGeneratedMaterialPaletteEntries];
-extern const std::uint8_t
-    kGeneratedMaterialIndices4bpp[kGeneratedMaterialPackedBytes];
 
 void decode_generated_material_atlas(std::uint16_t* output,
                                      std::size_t output_pixels) noexcept;
