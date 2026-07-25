@@ -5,9 +5,10 @@
 
 namespace deep_shelter::assets {
 
-constexpr std::size_t kGeneratedMaterialAtlasWidth = 64;
+constexpr std::size_t kGeneratedMaterialAtlasWidth = 128;
 constexpr std::size_t kGeneratedMaterialAtlasHeight = 16;
 constexpr std::size_t kGeneratedMaterialTileSize = 16;
+constexpr std::size_t kGeneratedMaterialTileCount = 8;
 constexpr std::size_t kGeneratedMaterialPaletteEntries = 16;
 constexpr std::size_t kGeneratedMaterialPixelCount =
     kGeneratedMaterialAtlasWidth * kGeneratedMaterialAtlasHeight;
@@ -16,11 +17,17 @@ constexpr std::size_t kGeneratedMaterialPackedBytes =
 constexpr std::size_t kGeneratedMaterialRuntimeBytes =
     kGeneratedMaterialPixelCount * sizeof(std::uint16_t);
 
+// Compact 16x16 materials derived from the reference pack attached to issue #85.
+// The production build stores only this generated 4bpp atlas, never loose PNGs.
 enum class GeneratedMaterial : std::uint8_t {
     Rock = 0,
-    Steel = 1,
-    Grating = 2,
-    ControlPanel = 3,
+    ExcavatedRock = 1,
+    Steel = 2,
+    VaultPanel = 3,
+    Grating = 4,
+    Water = 5,
+    Hydroponic = 6,
+    ControlPanel = 7,
 };
 
 extern const std::uint16_t
@@ -28,11 +35,8 @@ extern const std::uint16_t
 extern const std::uint8_t
     kGeneratedMaterialIndices4bpp[kGeneratedMaterialPackedBytes];
 
-// Row-major output, useful for host validation and previews.
 void decode_generated_material_atlas(std::uint16_t* output,
                                      std::size_t output_pixels) noexcept;
-
-// PICA200 8x8 Morton-tiled output, ready for C3D_TexUpload/C3D_Tex storage.
 void decode_generated_material_atlas_tiled(std::uint16_t* output,
                                            std::size_t output_pixels) noexcept;
 
