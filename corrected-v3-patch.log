@@ -1,5 +1,5 @@
 Traceback (most recent call last):
-  File "/tmp/apply_room_lifecycle_v3.py", line 1, in <module>
-    source = Path('source/PlayableShelterSession.cpp')
-             ^^^^
-NameError: name 'Path' is not defined
+  File "/tmp/apply_room_lifecycle_v3.py", line 4, in <module>
+    text = replace_once(
+           ^^^^^^^^^^^^
+NameError: name 'replace_once' is not defined
