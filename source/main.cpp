@@ -127,16 +127,34 @@ void draw_text(C2D_TextBuf buffer,
     C2D_DrawText(&text, C2D_WithColor, x, y, 0.5f, scale, scale, color);
 }
 
+const char* room_label(int room_index) {
+    switch ((room_index % 6 + 6) % 6) {
+        case 0: return "ELEKTROWNIA";
+        case 1: return "HYDROPONIKA";
+        case 2: return "UZDATNIANIE WODY";
+        case 3: return "WARSZTAT";
+        case 4: return "MAGAZYN";
+        default: return "KWATERY";
+    }
+}
+
 void draw_resource(GeneratedUiRenderer& atlas,
                    C2D_TextBuf buffer,
                    UiIcon icon,
                    int value,
-                   float x) {
-    char text[16];
-    std::snprintf(text, sizeof(text), "%d", value);
-    atlas.draw_icon(icon, x, 32.0f, 14.0f, 14.0f, 0.35f);
-    draw_text(buffer, text, x + 17.0f, 34.0f, 0.40f,
-              C2D_Color32(230, 238, 240, 255));
+                   float x,
+                   const char* label,
+                   u32 accent) {
+    char value_text[16];
+    std::snprintf(value_text, sizeof(value_text), "%d", value);
+    C2D_DrawRectSolid(x, 31.0f, 0.20f, 69.0f, 38.0f,
+                      C2D_Color32(24, 38, 45, 255));
+    C2D_DrawRectSolid(x, 31.0f, 0.21f, 3.0f, 38.0f, accent);
+    atlas.draw_icon(icon, x + 8.0f, 39.0f, 18.0f, 18.0f, 0.35f);
+    draw_text(buffer, label, x + 31.0f, 37.0f, 0.28f,
+              C2D_Color32(137, 155, 163, 255));
+    draw_text(buffer, value_text, x + 31.0f, 50.0f, 0.46f,
+              C2D_Color32(238, 235, 216, 255));
 }
 
 void draw_button(GeneratedUiRenderer& atlas,
@@ -149,18 +167,21 @@ void draw_button(GeneratedUiRenderer& atlas,
                  UiIcon icon,
                  const char* label) {
     UiButtonState state = UiButtonState::Normal;
-    if (!enabled) {
-        state = UiButtonState::Disabled;
-    } else if (id == pressed_id) {
-        state = UiButtonState::Pressed;
-    } else if (id == focused_id) {
-        state = UiButtonState::Focused;
-    }
-    atlas.draw_button_frame(state, x, 160.0f, 66.0f, 34.0f);
-    atlas.draw_icon(icon, x + 5.0f, 169.0f, 16.0f, 16.0f, 0.35f);
-    draw_text(buffer, label, x + 23.0f, 169.0f, 0.36f,
-              enabled ? C2D_Color32(255, 255, 255, 255)
-                      : C2D_Color32(145, 151, 153, 255));
+    if (!enabled) state = UiButtonState::Disabled;
+    else if (id == pressed_id) state = UiButtonState::Pressed;
+    else if (id == focused_id) state = UiButtonState::Focused;
+    const bool focused = enabled && id == focused_id;
+    C2D_DrawRectSolid(x, 184.0f, 0.19f, 70.0f, 42.0f,
+                      focused ? C2D_Color32(111, 75, 31, 255)
+                              : C2D_Color32(27, 39, 44, 255));
+    C2D_DrawRectSolid(x, 184.0f, 0.20f, 70.0f, 3.0f,
+                      focused ? C2D_Color32(241, 184, 70, 255)
+                              : C2D_Color32(67, 82, 86, 255));
+    atlas.draw_button_frame(state, x + 2.0f, 186.0f, 66.0f, 38.0f);
+    atlas.draw_icon(icon, x + 8.0f, 195.0f, 18.0f, 18.0f, 0.35f);
+    draw_text(buffer, label, x + 30.0f, 197.0f, 0.34f,
+              enabled ? C2D_Color32(244, 239, 220, 255)
+                      : C2D_Color32(105, 114, 117, 255));
 }
 
 void draw_bottom(C3D_RenderTarget* bottom,
@@ -169,42 +190,52 @@ void draw_bottom(C3D_RenderTarget* bottom,
                  const UiTree& ui,
                  GeneratedUiRenderer& atlas) {
     C2D_Prepare();
-    C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
+    C2D_TargetClear(bottom, C2D_Color32(9, 17, 21, 255));
     C2D_SceneBegin(bottom);
-
-    draw_text(buffer, "DEEP SHELTER 3D - PRAWDZIWE 2.5D", 12.0f, 10.0f, 0.50f,
-              C2D_Color32(246, 211, 111, 255));
-    draw_resource(atlas, buffer, UiIcon::Credits, state.credits, 12.0f);
-    draw_resource(atlas, buffer, UiIcon::Power, state.power, 86.0f);
-    draw_resource(atlas, buffer, UiIcon::Food, state.food, 154.0f);
-    draw_resource(atlas, buffer, UiIcon::Water, state.water, 222.0f);
-
-    char room[128];
-    std::snprintf(room,
-                  sizeof(room),
-                  "Pokoje %d/6   Pracownicy %d   Magazyn %d/30",
-                  state.rooms,
-                  state.workers,
-                  state.stored);
-    draw_text(buffer, room, 12.0f, 56.0f, 0.43f, C2D_Color32(159, 222, 184, 255));
-    draw_text(buffer, state.message, 12.0f, 84.0f, 0.39f,
-              C2D_Color32(255, 255, 255, 255));
-    draw_text(buffer,
-              "Circle Pad: przesun  L/R: zoom  Suwak 3D: stereoskopia",
-              12.0f,
-              118.0f,
-              0.34f,
-              C2D_Color32(183, 202, 216, 255));
-
+    C2D_DrawRectSolid(0.0f, 0.0f, 0.10f, 320.0f, 25.0f,
+                      C2D_Color32(20, 31, 36, 255));
+    C2D_DrawRectSolid(0.0f, 24.0f, 0.11f, 320.0f, 2.0f,
+                      C2D_Color32(193, 139, 48, 255));
+    draw_text(buffer, "DEEP SHELTER", 12.0f, 7.0f, 0.47f,
+              C2D_Color32(244, 204, 105, 255));
+    draw_text(buffer, "SEKTOR 01  //  ONLINE", 174.0f, 9.0f, 0.28f,
+              C2D_Color32(120, 192, 151, 255));
+    draw_resource(atlas, buffer, UiIcon::Credits, state.credits, 10.0f,
+                  "KREDYTY", C2D_Color32(221, 171, 73, 255));
+    draw_resource(atlas, buffer, UiIcon::Power, state.power, 87.0f,
+                  "ENERGIA", C2D_Color32(232, 151, 56, 255));
+    draw_resource(atlas, buffer, UiIcon::Food, state.food, 164.0f,
+                  "ZYWNOSC", C2D_Color32(95, 172, 103, 255));
+    draw_resource(atlas, buffer, UiIcon::Water, state.water, 241.0f,
+                  "WODA", C2D_Color32(75, 151, 188, 255));
+    C2D_DrawRectSolid(10.0f, 77.0f, 0.15f, 300.0f, 82.0f,
+                      C2D_Color32(18, 29, 34, 255));
+    C2D_DrawRectSolid(10.0f, 77.0f, 0.16f, 4.0f, 82.0f,
+                      C2D_Color32(180, 128, 48, 255));
+    draw_text(buffer, "ZAZNACZONY POKOJ", 22.0f, 84.0f, 0.27f,
+              C2D_Color32(151, 168, 171, 255));
+    draw_text(buffer, room_label(state.selected_room), 22.0f, 98.0f, 0.44f,
+              C2D_Color32(246, 193, 82, 255));
+    draw_text(buffer, state.message, 22.0f, 118.0f, 0.34f,
+              C2D_Color32(244, 239, 220, 255));
+    char status[128];
+    std::snprintf(status, sizeof(status),
+                  "POKOJE %d/6  ZALOGA %d  ZAPAS %d/30",
+                  state.rooms, state.workers, state.stored);
+    draw_text(buffer, status, 22.0f, 140.0f, 0.31f,
+              C2D_Color32(113, 196, 151, 255));
+    draw_text(buffer, "D-Pad: pokoj  Pad: kamera  L/R: zoom",
+              22.0f, 154.0f, 0.29f,
+              C2D_Color32(136, 154, 160, 255));
     const int focused_id = ui.focused_id().value_or(-1);
     const int pressed_id = ui.pressed_id().value_or(-1);
-    draw_button(atlas, buffer, 12.0f, 1, focused_id, pressed_id, true,
+    draw_button(atlas, buffer, 10.0f, 1, focused_id, pressed_id, true,
                 UiIcon::Build, "BUDUJ");
-    draw_button(atlas, buffer, 88.0f, 2, focused_id, pressed_id, true,
+    draw_button(atlas, buffer, 87.0f, 2, focused_id, pressed_id, true,
                 UiIcon::Work, "PRACA");
-    draw_button(atlas, buffer, 164.0f, 3, focused_id, pressed_id, state.stored > 0,
-                UiIcon::Collect, "ODBIERZ");
-    draw_button(atlas, buffer, 240.0f, 4, focused_id, pressed_id, true,
+    draw_button(atlas, buffer, 164.0f, 3, focused_id, pressed_id,
+                state.stored > 0, UiIcon::Collect, "ODBIERZ");
+    draw_button(atlas, buffer, 241.0f, 4, focused_id, pressed_id, true,
                 UiIcon::Save, "ZAPIS");
     C2D_Flush();
 }

@@ -39,6 +39,7 @@ private:
     void append_room(float x,
                      float y,
                      int room_index,
+                     bool active,
                      bool selected,
                      bool resident,
                      int stored) noexcept;

@@ -38,6 +38,11 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 
 ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   -I"$ROOT/include" \
+  "$ROOT/tests/shelter_scene_layout_tests.cpp" \
+  -o "$BUILD_DIR/shelter_scene_layout_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
   "$ROOT/tests/ui_framework_tests.cpp" \
   "$ROOT/source/UiFramework.cpp" \
   -o "$BUILD_DIR/ui_framework_tests"
@@ -84,6 +89,7 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/trusted_clock_tests"
 "$BUILD_DIR/shelter_camera_tests"
 "$BUILD_DIR/scene3d_normals_tests"
+"$BUILD_DIR/shelter_scene_layout_tests"
 "$BUILD_DIR/ui_framework_tests"
 "$BUILD_DIR/shelter_grid_tests"
 "$BUILD_DIR/room_catalog_tests"
@@ -91,4 +97,4 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/economy_simulation_tests"
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
-echo "host-tests: all core, persistence, time, rendering, normals, UI, shelter, room, economy, dweller and work assignment tests passed"
+echo "host-tests: all core, persistence, time, rendering, normals, layout, UI, shelter, room, economy, dweller and work assignment tests passed"
