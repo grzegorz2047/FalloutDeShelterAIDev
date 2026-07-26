@@ -24,20 +24,17 @@ jobs:
 
           session = Path('source/PlayableShelterSession.cpp')
           text = session.read_text()
-          old = '''    } else {
-              std::remove(backup.c_str());
-          }
-          if (std::rename(temp.c_str(), main.c_str()) != 0) {'''
-          new = '''    }
-          if (std::rename(temp.c_str(), main.c_str()) != 0) {'''
-          if text.count(old) != 1:
-              raise SystemExit(f'unexpected backup-removal matches: {text.count(old)}')
-          session.write_text(text.replace(old, new, 1))
+          anchor = '    } else if (current.status != PlayableSaveStatus::Missing) {'
+          start = text.index(anchor)
+          removal = '    } else {\n        std::remove(backup.c_str());\n    }\n'
+          removal_start = text.index(removal, start)
+          text = text[:removal_start] + '    }\n' + text[removal_start + len(removal):]
+          session.write_text(text)
 
           tests = Path('tests/playable_shelter_session_tests.cpp')
           text = tests.read_text()
-          marker = '''    std::ofstream broken(path + ".sav",
-                               std::ios::binary | std::ios::trunc);'''
+          marker = '    std::ofstream broken(path + ".sav",\n'
+          marker_start = text.index(marker)
           insertion = '''    assert(std::remove((path + ".sav").c_str()) == 0);
               assert(save_playable_state(path, newer.state()) ==
                      PlayableSaveStatus::Ok);
@@ -52,10 +49,9 @@ jobs:
               assert(preserved_backup.status == PlayableSaveStatus::Ok);
               assert(preserved_backup.state.room_entries[1].production_steps == 73);
 
-          ''' + marker
-          if text.count(marker) != 1:
-              raise SystemExit(f'unexpected broken-save marker matches: {text.count(marker)}')
-          tests.write_text(text.replace(marker, insertion, 1))
+          '''
+          text = text[:marker_start] + insertion + text[marker_start:]
+          tests.write_text(text)
           PY
       - name: Run host tests
         run: bash scripts/run_host_tests.sh
