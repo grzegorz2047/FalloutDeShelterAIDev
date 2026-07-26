@@ -16,20 +16,27 @@ jobs:
       - name: Build symbols
         shell: bash
         run: |
-          set -euo pipefail
-          make release -j2
+          make release -j2 || true
           {
-            echo "LR 0x08003908"
-            arm-none-eabi-addr2line -a -f -C -e DeepShelter3D.elf 0x08003908
-            echo "R03 0x080009F8"
-            arm-none-eabi-addr2line -a -f -C -e DeepShelter3D.elf 0x080009F8
-            echo "R01/R07/R14 0x08003908"
-            arm-none-eabi-objdump -d -C DeepShelter3D.elf | grep -B12 -A12 '8003908:' || true
+            echo "DEVKITARM=$DEVKITARM"
+            find . -maxdepth 2 -type f \( -name '*.elf' -o -name '*.map' \) -print
+            ls -l "$DEVKITARM/bin"/*addr2line "$DEVKITARM/bin"/*objdump 2>&1 || true
+            elf=$(find . -maxdepth 2 -type f -name 'DeepShelter3D.elf' -print -quit)
+            echo "ELF=$elf"
+            if [ -n "$elf" ]; then
+              echo "LR 0x08003908"
+              "$DEVKITARM/bin/arm-none-eabi-addr2line" -a -f -C -e "$elf" 0x08003908 || true
+              echo "R03 0x080009F8"
+              "$DEVKITARM/bin/arm-none-eabi-addr2line" -a -f -C -e "$elf" 0x080009F8 || true
+              echo "Disassembly near LR"
+              "$DEVKITARM/bin/arm-none-eabi-objdump" -d -C "$elf" | grep -B16 -A16 '8003908:' || true
+            fi
           } | tee arm-exception-symbols.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: DeepShelter3D-arm-exception-symbols
           path: |
             arm-exception-symbols.txt
             DeepShelter3D.map
-          if-no-files-found: error
+          if-no-files-found: warn
