@@ -6,7 +6,9 @@
 #include <string>
 #include <vector>
 
+#if defined(__3DS__)
 #include <citro2d.h>
+#endif
 
 namespace deep_shelter::ui {
 
@@ -90,6 +92,7 @@ private:
     int press_y_ = 0;
 };
 
+#if defined(__3DS__)
 namespace bitmap_text {
 
 using Glyph = std::array<u8, 7>;
@@ -223,9 +226,11 @@ inline void draw(C2D_Text*,
 }
 
 }  // namespace bitmap_text
+#endif
 
 }  // namespace deep_shelter::ui
 
+#if defined(__3DS__)
 // The clean Azahar environment does not provide a dumped system BCFNT. Keep
 // the existing application text API while routing it to an embedded 5x7 font.
 #define C2D_TextParse(text, buffer, value) \
@@ -235,3 +240,4 @@ inline void draw(C2D_Text*,
 #define C2D_DrawText(text, flags, x, y, z, scale_x, scale_y, color) \
     ::deep_shelter::ui::bitmap_text::draw( \
         (text), (flags), (x), (y), (z), (scale_x), (scale_y), (color))
+#endif
