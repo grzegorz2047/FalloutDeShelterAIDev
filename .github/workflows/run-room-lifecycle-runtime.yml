@@ -31,6 +31,37 @@ jobs:
           Path('/tmp/apply_room_lifecycle.py').write_text(script)
           PY
           python3 /tmp/apply_room_lifecycle.py
+      - name: Apply compile and V2 migration fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('source/PlayableShelterSession.cpp')
+          text = path.read_text()
+          constants = '''constexpr int kPlayableMaximumRoomLevel = 3;
+          constexpr int kPlayableMaximumGroupWidth = 3;
+          '''
+          declaration = '''int room_index_at_state(const PlayableShelterState& state,
+                                  int column,
+                                  int floor) noexcept;
+
+          ''' + constants
+          if constants not in text:
+              raise SystemExit('room lifecycle constants missing')
+          text = text.replace(constants, declaration, 1)
+          old = '''    return offset == body.size() && valid_playable_state(state);
+          }
+          '''
+          new = '''    if (offset != body.size()) return false;
+              normalize_room_groups(state);
+              return valid_playable_state(state);
+          }
+          '''
+          if old not in text:
+              raise SystemExit('V2 validation return missing')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
       - name: Run host tests and capture diagnostics
         id: host_tests
         shell: bash
@@ -48,7 +79,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           if [ "${{ steps.host_tests.outputs.status }}" = "0" ]; then
             rm -f room-lifecycle-host-test.log
-            git add include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp
+            git add -A include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp room-lifecycle-host-test.log
             git commit -m "Integrate playable room lifecycle runtime"
           else
             git add room-lifecycle-host-test.log
