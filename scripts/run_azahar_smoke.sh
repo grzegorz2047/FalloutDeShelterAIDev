@@ -38,6 +38,16 @@ stop_azahar() {
   azahar_pid=""
 }
 
+capture_exception_dialog() {
+  local exception_window
+  exception_window=$(xdotool search --name '^An exception occurred$' | head -n1 || true)
+  if [ -n "$exception_window" ]; then
+    import -display "$DISPLAY" -window "$exception_window" azahar-exception.png || true
+  else
+    import -display "$DISPLAY" -window root azahar-exception.png || true
+  fi
+}
+
 cleanup() {
   stop_azahar || true
   kill "$xvfb_pid" 2>/dev/null || true
@@ -80,6 +90,7 @@ done
 if [ -z "$perf_path" ] || [ -z "$phase_one_path" ]; then
   echo "Azahar did not produce smoke readiness markers within 30 seconds." >&2
   timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
+  capture_exception_dialog
   cat azahar-window-tree.log >&2 || true
   cat azahar-3dsx-launch.log >&2
   exit 1
@@ -133,6 +144,7 @@ done
 if [ -z "$phase_two_path" ]; then
   echo "Azahar did not produce the resume marker within 15 seconds." >&2
   timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
+  capture_exception_dialog
   cat azahar-window-tree.log >&2 || true
   cat azahar-3dsx-resume.log >&2
   exit 1
@@ -158,6 +170,7 @@ grep -q 'idle_state=roaming' azahar-playable-smoke-resume.log
 timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
 if grep -Eq 'An exception occurred|ExceptionRaised|NoExecuteFault' azahar-window-tree.log azahar-3dsx-launch.log azahar-3dsx-resume.log; then
   echo "Azahar reported an emulated application exception." >&2
+  capture_exception_dialog
   cat azahar-window-tree.log >&2
   cat azahar-3dsx-launch.log >&2
   cat azahar-3dsx-resume.log >&2
