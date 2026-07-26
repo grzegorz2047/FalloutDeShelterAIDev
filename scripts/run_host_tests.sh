@@ -43,10 +43,7 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$R
 "$BUILD_DIR/playable_shelter_session_tests"
 
 if [[ "$UI_BOOTSTRAPPED" == "1" ]]; then
-  cp source/main.cpp /tmp/room-lifecycle-main.cpp
-  git fetch origin agent/playable-room-lifecycle main
-  git checkout -B agent/playable-room-lifecycle origin/agent/playable-room-lifecycle
-  cp /tmp/room-lifecycle-main.cpp source/main.cpp
+  git fetch origin main
   git checkout origin/main -- scripts/run_host_tests.sh .github/workflows/build.yml
   rm -f scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py
   git config user.name github-actions[bot]
