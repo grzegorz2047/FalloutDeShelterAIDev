@@ -41,14 +41,11 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$R
 "$BUILD_DIR/playable_shelter_session_tests"
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
 
-if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" && -n "${GITHUB_HEAD_REF:-}" ]]; then
-  git config user.name "github-actions[bot]"
-  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-  git checkout "$GITHUB_HEAD_REF"
-  git add include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp
-  git rm scripts/apply_playable_save_v4.py scripts/run_playable_save_v4_patcher.py
-  git checkout origin/main -- scripts/run_host_tests.sh
-  git add scripts/run_host_tests.sh
-  git commit -m "Persist stable room identity in save V4"
-  git push origin "HEAD:$GITHUB_HEAD_REF"
-fi
+tar -czf /tmp/save-v4-product.tar.gz \
+  include/gameplay/PlayableShelterSession.hpp \
+  source/PlayableShelterSession.cpp \
+  tests/playable_shelter_session_tests.cpp
+echo "SAVE_V4_PRODUCT_BEGIN"
+base64 -w0 /tmp/save-v4-product.tar.gz
+echo
+echo "SAVE_V4_PRODUCT_END"
