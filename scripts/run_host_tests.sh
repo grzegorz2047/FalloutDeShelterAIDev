@@ -3,6 +3,7 @@ set -euo pipefail
 exec > >(tee build.log) 2>&1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 python3 "$ROOT/scripts/run_playable_save_v4_patcher.py"
 BUILD_DIR="$ROOT/build/host-tests"
 mkdir -p "$BUILD_DIR"
