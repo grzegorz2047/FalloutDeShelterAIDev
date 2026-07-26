@@ -1,7 +1,9 @@
 #include <cassert>
 
+#include "render/RoomVisualProfile.hpp"
 #include "render/ShelterSceneLayout.hpp"
 
+using namespace deep_shelter::render;
 using namespace deep_shelter::render::layout;
 
 int main() {
@@ -16,6 +18,8 @@ int main() {
                   kActiveRoomBaseBoxes + kMaxRoomSignatureBoxes);
     static_assert(kWorstCaseSceneBoxes <= kMaxSceneBoxes);
     static_assert(kWorstCaseSceneVertices <= kMaxSceneVertices);
+    static_assert(kTargetRenderPasses >= 3);
+    static_assert(kRoomVisualProfiles.size() == kRoomX.size());
 
     for (std::size_t room = 0; room < kRoomX.size(); ++room) {
         assert(kRoomX[room] >= 0.0f);
@@ -31,6 +35,15 @@ int main() {
                          kElevatorWidth,
                          kElevatorHeight));
 
+        const auto& profile = kRoomVisualProfiles[room];
+        assert(static_cast<std::size_t>(profile.dominant_prop) == room);
+        assert(profile.secondary_prop_count >= 3);
+        assert(profile.dominant_width >= 50.0f);
+        assert(profile.dominant_height >= 28.0f);
+        assert(profile.resident_clearance_width >= 22.0f);
+        assert(profile.dominant_width + profile.resident_clearance_width <=
+               kRoomWidth - 4.0f);
+
         for (std::size_t other = room + 1; other < kRoomX.size(); ++other) {
             assert(!overlaps(kRoomX[room],
                              kRoomY[room],
@@ -40,6 +53,8 @@ int main() {
                              kRoomY[other],
                              kRoomWidth,
                              kRoomHeight));
+            assert(kRoomVisualProfiles[room].dominant_prop !=
+                   kRoomVisualProfiles[other].dominant_prop);
         }
     }
 
