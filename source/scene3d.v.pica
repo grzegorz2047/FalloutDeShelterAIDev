@@ -4,11 +4,12 @@
 .fvec projection[4], modelView[4]
 
 ; Constants
-; Bright display profile for the small 3DS screen: subtle directional form,
-; but no face drops below 88% of its authored room colour.
-.constf constants(0.0, 1.0, 0.88, 0.12)
+; Three branchless cel-light bands tuned for the native 400x240 display:
+; 0.78 in shadow, 0.89 in mid light and 1.00 on directly lit faces.
+.constf constants(0.0, 1.0, 0.78, 0.11)
+.constf celThresholds(0.35, 0.72, 0.0, 0.0)
 .constf lightDirection(-0.408248, -0.408248, 0.816497, 0.0)
-.constf colourLift(0.22, 0.22, 0.22, 0.0)
+.constf colourLift(0.08, 0.08, 0.08, 0.0)
 ; Scale the compact multifloor cutaway 1.8x around world centre (200, 120).
 .constf framing(1.8, -160.0, -96.0, 0.0)
 .alias ones constants.yyyy
@@ -45,16 +46,20 @@
     dp4 outpos.z, projection[2], r1
     dp4 outpos.w, projection[3], r1
 
-    ; Cheap fixed directional lighting: ambient + max(dot(N, L), 0) * diffuse.
+    ; Quantize max(dot(N, L), 0) into three cel bands without flow control.
     mov r3, lightDirection
     mov r4, constants
     dp3 r2.x, innormal, r3
     max r2.x, r2.x, r4.x
-    mul r2.x, r2.x, r4.w
-    add r2.x, r2.x, r4.z
+    sge r7.x, r2.x, celThresholds.x
+    sge r7.y, r2.x, celThresholds.y
+    mul r7.x, r7.x, r4.w
+    mul r7.y, r7.y, r4.w
+    add r2.x, r4.z, r7.x
+    add r2.x, r2.x, r7.y
 
-    ; Generated material atlas coordinates and lit vertex tint. A small display
-    ; lift is applied after lighting so the room interiors remain readable.
+    ; Generated material atlas coordinates and cel-lit vertex tint. A restrained
+    ; display lift preserves dark-room readability without washing out the bands.
     mov outtc0, intex
     mul r6.xyz, inclr, r2.x
     mov r5, colourLift

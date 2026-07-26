@@ -83,14 +83,17 @@ jobs:
           chmod +x azahar.AppImage
           ./azahar.AppImage --appimage-extract > azahar-extract.log 2>&1
           test -x squashfs-root/AppRun
-      - name: Install CIA
+      - name: Install CIA and prepare benchmark marker
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p azahar-home
           HOME="$PWD/azahar-home" timeout 90s xvfb-run -a ./squashfs-root/AppRun --install "$PWD/dist/DeepShelter3D.cia" 2>&1 | tee azahar-cia-install.log
           grep -q "Installed CIA successfully" azahar-cia-install.log
-      - name: Launch 3DSX and verify six-room presentation frame
+          sdmc_path=$(find azahar-home -type d -iname 'sdmc' -print -quit)
+          test -n "$sdmc_path"
+          touch "$sdmc_path/DeepShelter3D_benchmark.flag"
+      - name: Launch 3DSX and verify lighting metrics
         shell: bash
         timeout-minutes: 2
         run: |
@@ -128,11 +131,13 @@ jobs:
           HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
           azahar_pid=$!
 
+          # The one-shot SD marker records one mono bucket, then automatically
+          # forces the physical slider value to full stereo for later buckets.
           for second in $(seq 1 18); do
             sleep 1
             if ! kill -0 "$azahar_pid" 2>/dev/null; then
               wait "$azahar_pid" || true
-              echo "Azahar exited before producing a stable frame." >&2
+              echo "Azahar exited before producing stable mono/stereo metrics." >&2
               cat azahar-3dsx-launch.log >&2
               exit 1
             fi
@@ -141,11 +146,20 @@ jobs:
           window_id=$(xdotool search --name '^Azahar [0-9]' | tail -n 1)
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
+
+          # Keep the existing deterministic six-room presentation state.
           for room in $(seq 1 5); do
             xdotool key z
             sleep 0.5
           done
           sleep 3
+
+          perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
+          test -n "$perf_path"
+          cp "$perf_path" azahar-performance.log
+          grep -q 'DEEP_SHELTER_PERF mode=mono' azahar-performance.log
+          grep -q 'DEEP_SHELTER_PERF mode=stereo' azahar-performance.log
+          cat azahar-performance.log
 
           timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
           if grep -Eq "An exception occurred|ExceptionRaised|NoExecuteFault" azahar-window-tree.log azahar-3dsx-launch.log; then
@@ -155,11 +169,23 @@ jobs:
             exit 1
           fi
 
+          # Keep the complete desktop capture for diagnostics, but also publish
+          # enlarged per-screen crops. The fixed Xvfb geometry gives the emulator
+          # a stable central 400x240 top screen and 320x240 bottom screen.
           timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
           test -s azahar-first-frame.png
-          colors=$(timeout 10s identify -format '%k' azahar-first-frame.png)
-          echo "Captured six-room presentation frame with $colors colors"
-          test "$colors" -gt 16
+          convert azahar-first-frame.png -crop 420x250+430+185 +repage \
+            -filter point -resize 1260x750 azahar-top-screen-3x.png
+          convert azahar-first-frame.png -crop 340x250+470+410 +repage \
+            -filter point -resize 1020x750 azahar-bottom-screen-3x.png
+          test "$(identify -format '%wx%h' azahar-top-screen-3x.png)" = "1260x750"
+          test "$(identify -format '%wx%h' azahar-bottom-screen-3x.png)" = "1020x750"
+          top_colors=$(identify -format '%k' azahar-top-screen-3x.png)
+          bottom_colors=$(identify -format '%k' azahar-bottom-screen-3x.png)
+          echo "Captured readable top screen with $top_colors colors"
+          echo "Captured readable bottom screen with $bottom_colors colors"
+          test "$top_colors" -gt 16
+          test "$bottom_colors" -gt 16
 
           if grep -Eq "could not connect to display|X11 connection broke|terminate called|Fatal|Unhandled exception" azahar-3dsx-launch.log; then
             cat azahar-3dsx-launch.log >&2
@@ -173,14 +199,14 @@ jobs:
             fi
             sleep 0.25
           done
-      - name: Upload Azahar logs and first frame
+      - name: Upload Azahar logs and readable frames
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DeepShelter3D-Azahar-logs
           path: |
             azahar-*.log
-            azahar-first-frame.png
+            azahar-*.png
           if-no-files-found: warn
 
   publish-release:
