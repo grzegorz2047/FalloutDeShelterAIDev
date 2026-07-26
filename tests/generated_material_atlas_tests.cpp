@@ -8,7 +8,6 @@
 using namespace deep_shelter::assets;
 
 namespace {
-
 constexpr std::size_t pica_tile_offset(std::size_t x, std::size_t y) noexcept {
     const std::size_t tile_x = x / 8;
     const std::size_t tile_y = y / 8;
@@ -25,19 +24,20 @@ constexpr std::size_t pica_tile_offset(std::size_t x, std::size_t y) noexcept {
         ((local_y & 4u) << 3u);
     return tile_index * 64u + morton;
 }
-
 }  // namespace
 
 int main() {
-    static_assert(kGeneratedMaterialAtlasWidth == 64);
+    static_assert(kGeneratedMaterialAtlasWidth == 128);
     static_assert(kGeneratedMaterialAtlasHeight == 16);
     static_assert(kGeneratedMaterialTileSize == 16);
-    static_assert(kGeneratedMaterialPackedBytes == 512);
-    static_assert(kGeneratedMaterialRuntimeBytes == 2048);
+    static_assert(kGeneratedMaterialTileCount == 8);
+    static_assert(kGeneratedMaterialPackedBytes == 1024);
+    static_assert(kGeneratedMaterialRuntimeBytes == 4096);
+    static_assert(static_cast<std::uint8_t>(GeneratedMaterial::ControlPanel) + 1u ==
+                  kGeneratedMaterialTileCount);
 
     std::array<std::uint16_t, kGeneratedMaterialPixelCount> linear{};
     std::array<std::uint16_t, kGeneratedMaterialPixelCount> tiled{};
-
     decode_generated_material_atlas(linear.data(), linear.size());
     decode_generated_material_atlas_tiled(tiled.data(), tiled.size());
 
@@ -48,11 +48,24 @@ int main() {
         }
     }
 
+    for (std::size_t tile = 0; tile < kGeneratedMaterialTileCount; ++tile) {
+        const std::size_t start = tile * kGeneratedMaterialTileSize;
+        bool varied = false;
+        const auto first = linear[start];
+        for (std::size_t y = 0; y < kGeneratedMaterialTileSize; ++y) {
+            for (std::size_t x = 0; x < kGeneratedMaterialTileSize; ++x) {
+                if (linear[y * kGeneratedMaterialAtlasWidth + start + x] != first) {
+                    varied = true;
+                }
+            }
+        }
+        assert(varied);
+    }
+
     std::array<std::uint16_t, 8> too_small{};
     too_small.fill(0x55aau);
     decode_generated_material_atlas(too_small.data(), too_small.size());
     decode_generated_material_atlas_tiled(too_small.data(), too_small.size());
     for (const auto pixel : too_small) assert(pixel == 0x55aau);
-
     return 0;
 }
