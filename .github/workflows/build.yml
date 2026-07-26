@@ -93,7 +93,7 @@ jobs:
           sdmc_path=$(find azahar-home -type d -iname 'sdmc' -print -quit)
           test -n "$sdmc_path"
           touch "$sdmc_path/DeepShelter3D_benchmark.flag"
-      - name: Launch 3DSX and verify lighting metrics
+      - name: Launch 3DSX and exercise free-form building
         shell: bash
         timeout-minutes: 2
         run: |
@@ -150,6 +150,42 @@ jobs:
           grep -q 'DEEP_SHELTER_PERF mode=stereo' azahar-performance.log
           cat azahar-performance.log
 
+          window_id=$(xdotool search --name '^Azahar [0-9]' | tail -n 1)
+          test -n "$window_id"
+          xdotool windowfocus --sync "$window_id"
+
+          # Default Azahar keyboard mapping: A=Z, L=Q, R=W and D-pad=arrows.
+          # Enter build mode from the focused HUD, create a connected vertical
+          # shaft and then two distinct room types through the normal controls.
+          xdotool key Right
+          xdotool key z
+          sleep 0.5
+          for press in $(seq 1 5); do xdotool key w; done
+          xdotool key z
+          sleep 0.5
+
+          xdotool key z
+          xdotool key Down
+          xdotool key z
+          sleep 0.5
+
+          xdotool key z
+          xdotool key w
+          xdotool key Right
+          xdotool key z
+          sleep 0.5
+
+          xdotool key z
+          xdotool key w
+          xdotool key Right
+          xdotool key z
+          sleep 0.5
+
+          # Move focus back to the primary action and assign the first resident.
+          xdotool key Left
+          xdotool key z
+          sleep 4
+
           timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
           if grep -Eq "An exception occurred|ExceptionRaised|NoExecuteFault" azahar-window-tree.log azahar-3dsx-launch.log; then
             echo "Azahar reported an emulated application exception." >&2
@@ -158,9 +194,6 @@ jobs:
             exit 1
           fi
 
-          # Keep the complete desktop capture for diagnostics, but also publish
-          # enlarged per-screen crops. The fixed Xvfb geometry gives the emulator
-          # a stable central 400x240 top screen and 320x240 bottom screen.
           timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
           test -s azahar-first-frame.png
           convert azahar-first-frame.png -crop 420x250+430+185 +repage \
@@ -171,8 +204,8 @@ jobs:
           test "$(identify -format '%wx%h' azahar-bottom-screen-3x.png)" = "1020x750"
           top_colors=$(identify -format '%k' azahar-top-screen-3x.png)
           bottom_colors=$(identify -format '%k' azahar-bottom-screen-3x.png)
-          echo "Captured readable top screen with $top_colors colors"
-          echo "Captured readable bottom screen with $bottom_colors colors"
+          echo "Captured free-form shelter top screen with $top_colors colors"
+          echo "Captured readable lower HUD with $bottom_colors colors"
           test "$top_colors" -gt 16
           test "$bottom_colors" -gt 16
 
@@ -188,7 +221,7 @@ jobs:
             fi
             sleep 0.25
           done
-      - name: Upload Azahar logs and readable frames
+      - name: Upload Azahar logs and playable frames
         if: always()
         uses: actions/upload-artifact@v4
         with:
