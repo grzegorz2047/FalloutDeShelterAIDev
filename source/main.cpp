@@ -29,6 +29,7 @@ using deep_shelter::gameplay::BuildResult;
 using deep_shelter::gameplay::CollectResult;
 using deep_shelter::gameplay::PlayableSaveStatus;
 using deep_shelter::gameplay::PlayableShelterSession;
+using deep_shelter::gameplay::PlayableShelterState;
 using deep_shelter::gameplay::PrimaryAction;
 using deep_shelter::render::DwellerBillboardRenderer;
 using deep_shelter::render::GlowPassRenderer;
@@ -413,7 +414,18 @@ int main() {
     ui.add({kSaveActionId, kSaveActionBounds,
             true, true, true, {}, {}});
 
-    PlayableShelterSession session;
+    PlayableShelterState initial_state;
+    if (deep_shelter::render::telemetry::benchmark_sequence_enabled()) {
+        // Exercise the renderer with the densest playable shelter. This is a
+        // CI-only, one-shot presentation state selected by the benchmark
+        // marker; normal launches still begin with the first power room.
+        initial_state.credits = 0;
+        initial_state.rooms = deep_shelter::gameplay::kPlayableMaxRooms;
+        initial_state.selected_room =
+            deep_shelter::gameplay::kPlayableMaxRooms - 1;
+        initial_state.assigned_room = 0;
+    }
+    PlayableShelterSession session(initial_state);
     deep_shelter::core::FixedStepClock simulation_clock(
         1.0 / 60.0, 15, 0.25);
     UiAvailability ui_availability;
