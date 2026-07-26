@@ -31,13 +31,30 @@ jobs:
           Path('/tmp/apply_room_lifecycle.py').write_text(script)
           PY
           python3 /tmp/apply_room_lifecycle.py
-      - name: Run host tests
-        run: bash scripts/run_host_tests.sh
-      - name: Commit tested runtime
+      - name: Run host tests and capture diagnostics
+        id: host_tests
+        shell: bash
+        run: |
+          set +e
+          bash scripts/run_host_tests.sh > room-lifecycle-host-test.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          cat room-lifecycle-host-test.log
+          exit 0
+      - name: Commit runtime or diagnostics
         shell: bash
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp
-          git commit -m "Integrate playable room lifecycle runtime"
+          if [ "${{ steps.host_tests.outputs.status }}" = "0" ]; then
+            rm -f room-lifecycle-host-test.log
+            git add include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp
+            git commit -m "Integrate playable room lifecycle runtime"
+          else
+            git add room-lifecycle-host-test.log
+            git commit -m "Capture room lifecycle host test failure"
+          fi
           git push origin HEAD:agent/playable-room-lifecycle
+      - name: Fail when host tests failed
+        if: steps.host_tests.outputs.status != '0'
+        run: exit 1
