@@ -108,6 +108,19 @@ jobs:
             azahar-*.log
             azahar-*.png
           if-no-files-found: warn
+      - name: Upload shareable game package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepShelter3D-shareable
+          path: |
+            dist/DeepShelter3D.3dsx
+            dist/DeepShelter3D.cia
+            dist/SHA256SUMS.txt
+            azahar-first-frame.png
+            azahar-top-screen-3x.png
+            azahar-bottom-screen-3x.png
+          if-no-files-found: error
 
   publish-release:
     name: Publish immutable alpha release
