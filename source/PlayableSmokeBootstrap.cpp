@@ -165,7 +165,21 @@ void run_phase_two(PlayableShelterState& output) noexcept {
                        PlayableShelterState::RawDefaultsTag{}});
     const PlayableResidentPosition idle_before =
         resumed.resident_position(1u);
-    for (int step = 0; step < 90; ++step) resumed.fixed_step();
+    bool entered_lower_elevator = false;
+    bool used_vertical_elevator = false;
+    bool entered_upper_elevator = false;
+    for (int step = 0; step < 90; ++step) {
+        resumed.fixed_step();
+        const auto& moving = resumed.state().residents[0];
+        entered_lower_elevator = entered_lower_elevator ||
+            (moving.current_column == 1 && moving.current_floor == 0);
+        used_vertical_elevator = used_vertical_elevator ||
+            (moving.state == PlayableResidentState::Transit &&
+             moving.current_column == 1 && moving.next_column == 1 &&
+             moving.current_floor == 0 && moving.next_floor == 1);
+        entered_upper_elevator = entered_upper_elevator ||
+            (moving.current_column == 1 && moving.current_floor == 1);
+    }
     const PlayableResidentPosition idle_after =
         resumed.resident_position(1u);
 
@@ -183,7 +197,20 @@ void run_phase_two(PlayableShelterState& output) noexcept {
     const bool idle_unassigned =
         idle.assigned_room == -1 &&
         idle.state == PlayableResidentState::Roaming;
-    const bool ok = restored && arrived && idle_moved && idle_unassigned;
+
+    bool overview_selected = true;
+    while (resumed.state().selected_room > 1) {
+        if (!resumed.select_previous_room()) {
+            overview_selected = false;
+            break;
+        }
+    }
+    overview_selected = overview_selected &&
+        resumed.state().selected_room == 1;
+
+    const bool ok = restored && arrived && idle_moved && idle_unassigned &&
+                    entered_lower_elevator && used_vertical_elevator &&
+                    entered_upper_elevator && overview_selected;
     if (ok) output = resumed.state();
 
     FILE* log = std::fopen(kSmokePhaseTwoLogPath, "wb");
@@ -191,17 +218,22 @@ void run_phase_two(PlayableShelterState& output) noexcept {
         std::fprintf(
             log,
             "DEEP_SHELTER_PLAYABLE phase=resume status=%s restored=%d "
-            "rooms=%d credits=%d assigned=%d worker_state=%s "
-            "worker_column=%d worker_floor=%d idle_moved=%d "
+            "rooms=%d credits=%d selected=%d assigned=%d worker_state=%s "
+            "worker_column=%d worker_floor=%d elevator_lower=%d "
+            "elevator_vertical=%d elevator_upper=%d idle_moved=%d "
             "idle_assigned=%d idle_state=%s\n",
             ok ? "ok" : "failed",
             restored ? 1 : 0,
             resumed.state().rooms,
             resumed.state().credits,
+            resumed.state().selected_room,
             resumed.state().assigned_room,
             resident_state_label(worker.state),
             worker.current_column,
             worker.current_floor,
+            entered_lower_elevator ? 1 : 0,
+            used_vertical_elevator ? 1 : 0,
+            entered_upper_elevator ? 1 : 0,
             idle_moved ? 1 : 0,
             idle.assigned_room,
             resident_state_label(idle.state));
