@@ -113,18 +113,6 @@ int visual_profile(PlayableRoomType type) {
     return 0;
 }
 
-int room_cost(PlayableRoomType type) {
-    switch (type) {
-        case PlayableRoomType::Power: return 100;
-        case PlayableRoomType::Food:
-        case PlayableRoomType::Water: return 120;
-        case PlayableRoomType::Workshop: return 140;
-        case PlayableRoomType::Living: return 150;
-        case PlayableRoomType::Elevator: return 50;
-    }
-    return 0;
-}
-
 const char* preview_status_label(BuildPreviewStatus status) {
     switch (status) {
         case BuildPreviewStatus::Valid: return "GOTOWE";
@@ -141,7 +129,8 @@ const char* build_result_notice(BuildResult result) {
         case BuildResult::Built: return "Zbudowano wybrany modul.";
         case BuildResult::NotEnoughCredits: return "Za malo kredytow.";
         case BuildResult::Full: return "Brak wolnego miejsca.";
-        case BuildResult::InvalidPlacement: return "Nie mozna budowac w tej komorce.";
+        case BuildResult::InvalidPlacement:
+            return "Nie mozna budowac w tej komorce.";
     }
     return "Budowa nieudana.";
 }
@@ -206,10 +195,12 @@ ShelterSceneState3D make_scene_state(
         auto& target = scene.residents[scene.resident_count++];
         target.world_x =
             deep_shelter::render::layout::kWorldPaddingX +
-            position.column * deep_shelter::render::layout::kRoomPitchX + 48.0f;
+            position.column * deep_shelter::render::layout::kRoomPitchX +
+            48.0f;
         target.world_y =
             deep_shelter::render::layout::kWorldPaddingY +
-            position.floor * deep_shelter::render::layout::kRoomPitchY + 17.0f;
+            position.floor * deep_shelter::render::layout::kRoomPitchY +
+            17.0f;
         target.archetype = 4;
         if (resident.assigned_room >= 0 &&
             resident.assigned_room <
@@ -288,13 +279,13 @@ void draw_button(GeneratedUiRenderer& atlas,
     const u32 border = focused
                            ? C2D_Color32(241, 184, 70, 255)
                            : C2D_Color32(67, 82, 86, 255);
-    C2D_DrawRectSolid(x, y, 0.20f, width, primary ? 5.0f : 3.0f,
-                      border);
-    C2D_DrawRectSolid(x, y + height - 2.0f, 0.20f, width, 2.0f,
-                      border);
+    C2D_DrawRectSolid(x, y, 0.20f, width,
+                      primary ? 5.0f : 3.0f, border);
+    C2D_DrawRectSolid(x, y + height - 2.0f, 0.20f,
+                      width, 2.0f, border);
     C2D_DrawRectSolid(x, y, 0.20f, 2.0f, height, border);
-    C2D_DrawRectSolid(x + width - 2.0f, y, 0.20f, 2.0f, height,
-                      border);
+    C2D_DrawRectSolid(x + width - 2.0f, y, 0.20f,
+                      2.0f, height, border);
     const float icon_size = primary ? 30.0f : 20.0f;
     atlas.draw_icon(icon,
                     x + (primary ? 15.0f : 9.0f),
@@ -381,7 +372,7 @@ void draw_bottom(C3D_RenderTarget* bottom,
                   C2D_Color32(238, 198, 99, 255));
         draw_text(buffer, "POZYCJA", 118.0f, 81.0f, 0.34f,
                   C2D_Color32(137, 155, 163, 255));
-        char position_text[24];
+        char position_text[32];
         std::snprintf(position_text,
                       sizeof(position_text),
                       "C%d F%d",
@@ -400,17 +391,24 @@ void draw_bottom(C3D_RenderTarget* bottom,
                           C2D_Color32(32, 42, 43, 255));
         draw_text(buffer, "STEROWANIE", 22.0f, 121.0f, 0.31f,
                   C2D_Color32(231, 174, 68, 255));
-        draw_text(buffer, "D-PAD MIEJSCE  L/R TYP  A OK  B WSTECZ",
+        draw_text(buffer,
+                  "D-PAD MIEJSCE  L/R TYP  A OK  B WSTECZ",
                   84.0f, 126.0f, 0.25f,
                   C2D_Color32(244, 239, 220, 255));
 
-        draw_button(atlas, buffer, kPrimaryActionBounds, kPrimaryActionId,
-                    -1, -1, preview.valid(), true, UiIcon::Build,
+        draw_button(atlas, buffer,
+                    kPrimaryActionBounds, kPrimaryActionId,
+                    -1, -1, preview.valid(), true,
+                    UiIcon::Build,
                     preview.valid() ? "POTWIERDZ" : "NIEDOSTEPNE");
-        draw_button(atlas, buffer, kBuildActionBounds, kBuildActionId,
-                    -1, -1, true, false, room_type_icon(type), "TYP L/R");
-        draw_button(atlas, buffer, kSaveActionBounds, kSaveActionId,
-                    -1, -1, true, false, UiIcon::Save, "ANULUJ B");
+        draw_button(atlas, buffer,
+                    kBuildActionBounds, kBuildActionId,
+                    -1, -1, true, false,
+                    room_type_icon(type), "TYP L/R");
+        draw_button(atlas, buffer,
+                    kSaveActionBounds, kSaveActionId,
+                    -1, -1, true, false,
+                    UiIcon::Save, "ANULUJ B");
     } else {
         const auto& selected = state.room_entries[
             static_cast<std::size_t>(state.selected_room)];
@@ -418,7 +416,8 @@ void draw_bottom(C3D_RenderTarget* bottom,
                         20.0f, 48.0f, 22.0f, 22.0f, 0.35f);
         draw_text(buffer, "POKOJ", 50.0f, 44.0f, 0.36f,
                   C2D_Color32(151, 168, 171, 255));
-        draw_text(buffer, room_type_label(selected.type), 50.0f, 57.0f, 0.50f,
+        draw_text(buffer, room_type_label(selected.type),
+                  50.0f, 57.0f, 0.50f,
                   C2D_Color32(246, 193, 82, 255));
 
         C2D_DrawRectSolid(16.0f, 78.0f, 0.18f, 88.0f, 35.0f,
@@ -434,7 +433,8 @@ void draw_bottom(C3D_RenderTarget* bottom,
                   C2D_Color32(238, 198, 99, 255));
         draw_text(buffer, "ZALOGA", 118.0f, 81.0f, 0.34f,
                   C2D_Color32(137, 155, 163, 255));
-        draw_text(buffer, session.selected_has_worker() ? "1 / 3" : "0 / 3",
+        draw_text(buffer,
+                  session.selected_has_worker() ? "1 / 3" : "0 / 3",
                   118.0f, 96.0f, 0.46f,
                   C2D_Color32(112, 207, 159, 255));
         draw_text(buffer, "ZAPAS", 214.0f, 81.0f, 0.34f,
@@ -445,13 +445,19 @@ void draw_bottom(C3D_RenderTarget* bottom,
              session.selected_progress() + 59) /
             60;
         if (session.selected_has_worker()) {
-            std::snprintf(cycle_status, sizeof(cycle_status), "%d/30 %ds",
-                          session.selected_stored(), seconds_left);
+            std::snprintf(cycle_status,
+                          sizeof(cycle_status),
+                          "%d/30 %ds",
+                          session.selected_stored(),
+                          seconds_left);
         } else {
-            std::snprintf(cycle_status, sizeof(cycle_status), "%d/30 --",
+            std::snprintf(cycle_status,
+                          sizeof(cycle_status),
+                          "%d/30 --",
                           session.selected_stored());
         }
-        draw_text(buffer, cycle_status, 214.0f, 96.0f, 0.42f,
+        draw_text(buffer, cycle_status,
+                  214.0f, 96.0f, 0.42f,
                   C2D_Color32(112, 207, 159, 255));
 
         C2D_DrawRectSolid(16.0f, 120.0f, 0.18f, 280.0f, 25.0f,
@@ -466,15 +472,19 @@ void draw_bottom(C3D_RenderTarget* bottom,
         const int focused_id = ui.focused_id().value_or(-1);
         const int pressed_id = ui.pressed_id().value_or(-1);
         const PrimaryAction primary = session.primary_action();
-        draw_button(atlas, buffer, kPrimaryActionBounds, kPrimaryActionId,
+        draw_button(atlas, buffer,
+                    kPrimaryActionBounds, kPrimaryActionId,
                     focused_id, pressed_id,
                     primary != PrimaryAction::Wait, true,
                     primary_icon(primary), primary_label(primary));
-        draw_button(atlas, buffer, kBuildActionBounds, kBuildActionId,
+        draw_button(atlas, buffer,
+                    kBuildActionBounds, kBuildActionId,
                     focused_id, pressed_id,
-                    state.rooms < deep_shelter::gameplay::kPlayableRoomCapacity,
+                    state.rooms <
+                        deep_shelter::gameplay::kPlayableRoomCapacity,
                     false, UiIcon::Build, "BUDUJ");
-        draw_button(atlas, buffer, kSaveActionBounds, kSaveActionId,
+        draw_button(atlas, buffer,
+                    kSaveActionBounds, kSaveActionId,
                     focused_id, pressed_id, true, false,
                     UiIcon::Save, "ZAPIS");
     }
@@ -558,9 +568,12 @@ int main() {
     }
 
     C2D_Prepare();
-    C3D_RenderTarget* top_left = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
-    C3D_RenderTarget* top_right = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
-    C3D_RenderTarget* bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
+    C3D_RenderTarget* top_left =
+        C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    C3D_RenderTarget* top_right =
+        C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
+    C3D_RenderTarget* bottom =
+        C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
     C2D_TextBuf text_buffer = C2D_TextBufNew(4096);
     if (top_left == nullptr || top_right == nullptr || bottom == nullptr ||
         text_buffer == nullptr) {
@@ -633,7 +646,8 @@ int main() {
 
         const u64 current_frame_ms = osGetTime();
         const double frame_seconds =
-            static_cast<double>(current_frame_ms - previous_frame_ms) / 1000.0;
+            static_cast<double>(current_frame_ms - previous_frame_ms) /
+            1000.0;
         previous_frame_ms = current_frame_ms;
         simulation_clock.advance(frame_seconds, [&](double) {
             session.fixed_step();
@@ -648,7 +662,8 @@ int main() {
             if (down & KEY_DUP) floor_delta = -1;
             if (down & KEY_DDOWN) floor_delta = 1;
             if (column_delta != 0 || floor_delta != 0) {
-                (void)session.move_build_cursor(column_delta, floor_delta);
+                (void)session.move_build_cursor(
+                    column_delta, floor_delta);
                 center_on_cell(camera,
                                session.build_cursor_column(),
                                session.build_cursor_floor());
@@ -663,7 +678,9 @@ int main() {
             }
             if (down & KEY_A) {
                 const BuildResult result = session.confirm_build();
-                set_notice(notice, sizeof(notice), build_result_notice(result));
+                set_notice(notice,
+                           sizeof(notice),
+                           build_result_notice(result));
                 notice_until_ms = current_frame_ms + 1800u;
                 if (result == BuildResult::Built) {
                     build_mode = false;
@@ -673,17 +690,23 @@ int main() {
             }
             if (down & KEY_B) {
                 build_mode = false;
-                set_notice(notice, sizeof(notice), "Anulowano budowe.");
+                set_notice(notice,
+                           sizeof(notice),
+                           "Anulowano budowe.");
                 notice_until_ms = current_frame_ms + 1200u;
                 center_on_selected(camera, session);
             }
         } else {
             if (down & KEY_L) {
-                if (session.select_previous_room()) center_on_selected(camera, session);
+                if (session.select_previous_room()) {
+                    center_on_selected(camera, session);
+                }
                 notice_until_ms = 0;
             }
             if (down & KEY_R) {
-                if (session.select_next_room()) center_on_selected(camera, session);
+                if (session.select_next_room()) {
+                    center_on_selected(camera, session);
+                }
                 notice_until_ms = 0;
             }
 
@@ -713,21 +736,24 @@ int main() {
                 if (action->control_id == kPrimaryActionId) {
                     const PrimaryAction current = session.primary_action();
                     if (current == PrimaryAction::Assign) {
-                        const bool assigned = session.assign_resident_to_room(
-                            0u, session.state().selected_room);
-                        set_notice(notice,
-                                   sizeof(notice),
-                                   assigned
-                                       ? "Mieszkaniec jest w drodze do pracy."
-                                       : "Brak legalnej trasy do pokoju.");
+                        const bool assigned =
+                            session.assign_resident_to_room(
+                                0u, session.state().selected_room);
+                        set_notice(
+                            notice,
+                            sizeof(notice),
+                            assigned
+                                ? "Mieszkaniec jest w drodze do pracy."
+                                : "Brak legalnej trasy do pokoju.");
                     } else if (current == PrimaryAction::Collect) {
                         const CollectResult result =
                             session.collect_selected_room();
-                        set_notice(notice,
-                                   sizeof(notice),
-                                   result == CollectResult::Collected
-                                       ? "Odebrano produkcje."
-                                       : "Brak gotowej produkcji.");
+                        set_notice(
+                            notice,
+                            sizeof(notice),
+                            result == CollectResult::Collected
+                                ? "Odebrano produkcje."
+                                : "Brak gotowej produkcji.");
                     }
                     notice_until_ms = current_frame_ms + 1800u;
                 } else if (action->control_id == kBuildActionId) {
@@ -740,23 +766,27 @@ int main() {
                     const PlayableSaveStatus status =
                         deep_shelter::gameplay::save_playable_state(
                             kSavePath, session.state());
-                    set_notice(notice,
-                               sizeof(notice),
-                               status == PlayableSaveStatus::Ok
-                                   ? "Zapisano stan schronu."
-                                   : "Blad zapisu - sprawdz karte SD.");
+                    set_notice(
+                        notice,
+                        sizeof(notice),
+                        status == PlayableSaveStatus::Ok
+                            ? "Zapisano stan schronu."
+                            : "Blad zapisu - sprawdz karte SD.");
                     notice_until_ms = current_frame_ms + 1800u;
                 }
             } else if (action &&
                        action->type == UiActionType::ShowDisabledReason) {
-                set_notice(notice, sizeof(notice), action->message.c_str());
+                set_notice(notice,
+                           sizeof(notice),
+                           action->message.c_str());
                 notice_until_ms = current_frame_ms + 1800u;
             }
         }
 
         sync_ui_availability(ui, session, ui_availability);
         const float stereo =
-            osGet3DSliderState() * deep_shelter::render::kShelterStereoFullSlider;
+            osGet3DSliderState() *
+            deep_shelter::render::kShelterStereoFullSlider;
         const ShelterSceneState3D scene_state =
             make_scene_state(session, build_mode, animation_tick);
         RenderStats left_stats{};
@@ -768,7 +798,9 @@ int main() {
             const char* active_notice =
                 startup_notice != nullptr
                     ? startup_notice
-                    : (current_frame_ms < notice_until_ms ? notice : nullptr);
+                    : (current_frame_ms < notice_until_ms
+                           ? notice
+                           : nullptr);
             draw_bottom(bottom,
                         text_buffer,
                         session,
@@ -778,12 +810,15 @@ int main() {
                         build_mode);
         } else {
             C2D_Prepare();
-            C2D_TargetClear(bottom, C2D_Color32(15, 30, 39, 255));
+            C2D_TargetClear(bottom,
+                            C2D_Color32(15, 30, 39, 255));
             C2D_SceneBegin(bottom);
             draw_text(text_buffer,
                       startup_notice != nullptr
                           ? startup_notice
-                          : (build_mode ? "TRYB BUDOWY" : session.next_step()),
+                          : (build_mode
+                                 ? "TRYB BUDOWY"
+                                 : session.next_step()),
                       12.0f,
                       84.0f,
                       0.48f,
@@ -791,30 +826,52 @@ int main() {
             C2D_Flush();
         }
         if (renderer_ready) {
-            scene_renderer.draw(top_left, camera, -stereo,
-                                scene_state, left_stats);
+            scene_renderer.draw(top_left,
+                                camera,
+                                -stereo,
+                                scene_state,
+                                left_stats);
             if (dwellers_ready) {
-                dweller_renderer.draw(top_left, camera, -stereo,
-                                       scene_state, left_stats);
+                dweller_renderer.draw(top_left,
+                                       camera,
+                                       -stereo,
+                                       scene_state,
+                                       left_stats);
             }
             if (glow_ready) {
-                glow_renderer.draw(top_left, camera, -stereo, scene_state);
+                glow_renderer.draw(top_left,
+                                   camera,
+                                   -stereo,
+                                   scene_state);
             }
-            scene_renderer.draw(top_right, camera, stereo,
-                                scene_state, right_stats);
+            scene_renderer.draw(top_right,
+                                camera,
+                                stereo,
+                                scene_state,
+                                right_stats);
             if (dwellers_ready) {
-                dweller_renderer.draw(top_right, camera, stereo,
-                                       scene_state, right_stats);
+                dweller_renderer.draw(top_right,
+                                       camera,
+                                       stereo,
+                                       scene_state,
+                                       right_stats);
             }
             if (glow_ready) {
-                glow_renderer.draw(top_right, camera, stereo, scene_state);
+                glow_renderer.draw(top_right,
+                                   camera,
+                                   stereo,
+                                   scene_state);
             }
         } else {
-            C3D_RenderTargetClear(top_left, C3D_CLEAR_COLOR,
-                                  kRendererDiagnosticColor, 0);
+            C3D_RenderTargetClear(top_left,
+                                  C3D_CLEAR_COLOR,
+                                  kRendererDiagnosticColor,
+                                  0);
             C3D_FrameDrawOn(top_left);
-            C3D_RenderTargetClear(top_right, C3D_CLEAR_COLOR,
-                                  kRendererDiagnosticColor, 0);
+            C3D_RenderTargetClear(top_right,
+                                  C3D_CLEAR_COLOR,
+                                  kRendererDiagnosticColor,
+                                  0);
             C3D_FrameDrawOn(top_right);
         }
         C3D_FrameEnd(0);
