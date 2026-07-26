@@ -48,6 +48,18 @@ capture_exception_dialog() {
   fi
 }
 
+collect_startup_trace() {
+  local trace_path
+  trace_path=$(find azahar-home -type f -name 'DeepShelter3D_startup_trace.log' -print -quit)
+  if [ -n "$trace_path" ]; then
+    cp "$trace_path" azahar-startup-trace.log
+    echo "Startup trace:" >&2
+    cat azahar-startup-trace.log >&2
+  else
+    echo "Startup trace was not created." >&2
+  fi
+}
+
 cleanup() {
   stop_azahar || true
   kill "$xvfb_pid" 2>/dev/null || true
@@ -77,6 +89,7 @@ for second in $(seq 1 30); do
     wait "$azahar_pid" || true
     azahar_pid=""
     echo "Azahar exited before producing the build/transit state." >&2
+    collect_startup_trace
     cat azahar-3dsx-launch.log >&2
     exit 1
   fi
@@ -91,6 +104,7 @@ if [ -z "$perf_path" ] || [ -z "$phase_one_path" ]; then
   echo "Azahar did not produce smoke readiness markers within 30 seconds." >&2
   timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
   capture_exception_dialog
+  collect_startup_trace
   cat azahar-window-tree.log >&2 || true
   cat azahar-3dsx-launch.log >&2
   exit 1
@@ -132,6 +146,7 @@ for second in $(seq 1 15); do
     wait "$azahar_pid" || true
     azahar_pid=""
     echo "Azahar exited before validating the resumed state." >&2
+    collect_startup_trace
     cat azahar-3dsx-resume.log >&2
     exit 1
   fi
@@ -145,6 +160,7 @@ if [ -z "$phase_two_path" ]; then
   echo "Azahar did not produce the resume marker within 15 seconds." >&2
   timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
   capture_exception_dialog
+  collect_startup_trace
   cat azahar-window-tree.log >&2 || true
   cat azahar-3dsx-resume.log >&2
   exit 1
@@ -171,6 +187,7 @@ timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
 if grep -Eq 'An exception occurred|ExceptionRaised|NoExecuteFault' azahar-window-tree.log azahar-3dsx-launch.log azahar-3dsx-resume.log; then
   echo "Azahar reported an emulated application exception." >&2
   capture_exception_dialog
+  collect_startup_trace
   cat azahar-window-tree.log >&2
   cat azahar-3dsx-launch.log >&2
   cat azahar-3dsx-resume.log >&2
