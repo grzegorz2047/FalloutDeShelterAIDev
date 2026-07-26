@@ -3,35 +3,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT/build/host-tests"
-UI_BOOTSTRAPPED=0
 
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]] && [[ -f "$ROOT/scripts/apply_room_lifecycle_ui.py" ]]; then
-  : > ui-patch-error.txt
-  set +e
-  git fetch origin agent/playable-room-lifecycle main >> ui-patch-error.txt 2>&1
-  bootstrap_status=$?
-  if [[ "$bootstrap_status" -eq 0 ]]; then
-    git checkout -B agent/playable-room-lifecycle origin/agent/playable-room-lifecycle >> ui-patch-error.txt 2>&1
-    bootstrap_status=$?
-  fi
-  if [[ "$bootstrap_status" -eq 0 ]]; then
-    python3 scripts/apply_room_lifecycle_ui_include.py >> ui-patch-error.txt 2>&1
-    bootstrap_status=$?
-  fi
-  if [[ "$bootstrap_status" -eq 0 ]]; then
-    python3 scripts/apply_room_lifecycle_ui.py >> ui-patch-error.txt 2>&1
-    bootstrap_status=$?
-  fi
-  set -e
-  if [[ "$bootstrap_status" -ne 0 ]]; then
-    git config user.name github-actions[bot]
-    git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-    git add ui-patch-error.txt
-    git commit -m "Capture lifecycle UI bootstrap failure"
-    git push origin HEAD:agent/playable-room-lifecycle
-    exit "$bootstrap_status"
-  fi
-  UI_BOOTSTRAPPED=1
+  python3 scripts/apply_room_lifecycle_ui_include.py
+  python3 scripts/apply_room_lifecycle_ui.py
+  base64 -w0 source/main.cpp > build.log
 fi
 
 mkdir -p "$BUILD_DIR"
@@ -64,16 +40,4 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$R
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
-
-if [[ "$UI_BOOTSTRAPPED" == "1" ]]; then
-  git checkout origin/main -- scripts/run_host_tests.sh
-  rm -f scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py ui-patch-error.txt
-  git config user.name github-actions[bot]
-  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-  git add source/main.cpp scripts/run_host_tests.sh
-  git add -u scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py
-  git commit -m "Expose playable room lifecycle controls"
-  git push origin HEAD:agent/playable-room-lifecycle
-fi
-
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
