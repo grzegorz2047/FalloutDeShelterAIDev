@@ -23,7 +23,7 @@ jobs:
           python3 - <<'PY' > corrected-v3-patch.log 2>&1
           from pathlib import Path
           import re
-          workflow = Path('.github/workflows/apply-room-lifecycle-v3.yml').read_text()
+          workflow = Path('scripts/apply_room_lifecycle_v3_source.yml').read_text()
           start_marker = "          python3 - <<'PY'\n"
           end_marker = "          PY\n      - name: Run host tests"
           start = workflow.index(start_marker) + len(start_marker)
