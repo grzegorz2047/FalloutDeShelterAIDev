@@ -98,8 +98,6 @@ struct PlayableBuildPreview {
 struct PlayableRoomEntry {
     bool active = false;
     PlayableRoomType type = PlayableRoomType::Power;
-    // Stable RoomCatalog key persisted by save V4.
-    std::uint32_t catalog_key = 0;
     int column = 0;
     int floor = 0;
     int stored = 0;
@@ -107,6 +105,9 @@ struct PlayableRoomEntry {
     std::uint64_t segment_id = 0;
     std::uint64_t group_id = 0;
     int level = 1;
+    // Stable RoomCatalog key persisted by save V4. Placed in the structure's
+    // existing trailing alignment slot so ARM builds do not grow every room.
+    std::uint32_t catalog_key = 0;
 };
 
 struct PlayableResidentEntry {
