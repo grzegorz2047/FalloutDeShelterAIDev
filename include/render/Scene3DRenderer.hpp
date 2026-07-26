@@ -96,6 +96,7 @@ private:
 namespace telemetry {
 
 constexpr const char* kPerformanceLogPath = "sdmc:/DeepShelter3D_perf.log";
+constexpr const char* kBenchmarkFlagPath = "sdmc:/DeepShelter3D_benchmark.flag";
 
 struct FrameBucket {
     double cpu_submission_ms = 0.0;
@@ -114,6 +115,7 @@ struct FrameState {
     bool current_stereo = false;
     bool previous_stereo = false;
     bool previous_valid = false;
+    bool benchmark_sequence = false;
     bool benchmark_stereo = false;
     bool log_initialized = false;
 };
@@ -126,7 +128,16 @@ struct FrameState {
 inline void initialize_log() noexcept {
     FrameState& value = state();
     if (value.log_initialized) return;
+
     std::remove(kPerformanceLogPath);
+    FILE* flag = std::fopen(kBenchmarkFlagPath, "rb");
+    if (flag != nullptr) {
+        value.benchmark_sequence = true;
+        std::fclose(flag);
+        // The CI benchmark marker is intentionally one-shot. A normal launch
+        // after the measurement returns to the physical 3D slider immediately.
+        std::remove(kBenchmarkFlagPath);
+    }
     value.log_initialized = true;
 }
 
@@ -155,6 +166,13 @@ inline void emit_bucket(const char* mode, FrameBucket& bucket) noexcept {
             std::fclose(file);
         }
         svcOutputDebugString(message, static_cast<s32>(safe_length));
+    }
+
+    FrameState& value = state();
+    if (mode[0] == 'm' && value.benchmark_sequence) {
+        // After the first complete mono bucket, measure the exact same scene
+        // with the slider forced to its full stereoscopic separation.
+        value.benchmark_stereo = true;
     }
     bucket = {};
 }
@@ -223,18 +241,6 @@ inline void frame_end(u8 flags) noexcept {
     C3D_FrameEnd(flags);
 }
 
-inline u32 keys_down() noexcept {
-    u32 down = hidKeysDown();
-    const u32 held = hidKeysHeld();
-    if ((down & KEY_A) != 0 &&
-        (held & KEY_L) != 0 &&
-        (held & KEY_R) != 0) {
-        state().benchmark_stereo = !state().benchmark_stereo;
-        down &= ~KEY_A;
-    }
-    return down;
-}
-
 [[nodiscard]] inline float slider_state() noexcept {
     return state().benchmark_stereo ? 1.0f : osGet3DSliderState();
 }
@@ -255,7 +261,5 @@ inline u32 keys_down() noexcept {
         (eye_separation), (screen_distance), (is_left_handed))
 #define C3D_FrameEnd(flags) \
     ::deep_shelter::render::telemetry::frame_end((flags))
-#define hidKeysDown() \
-    ::deep_shelter::render::telemetry::keys_down()
 #define osGet3DSliderState() \
     ::deep_shelter::render::telemetry::slider_state()
