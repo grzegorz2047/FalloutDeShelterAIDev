@@ -1,0 +1,24 @@
+name: Export save V4 sources
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:20260610
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate and verify save V4
+        shell: bash
+        run: bash scripts/run_host_tests.sh
+      - name: Upload verified product sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepShelter3D-save-v4-product
+          path: /tmp/save-v4-product.tar.gz
+          if-no-files-found: error
