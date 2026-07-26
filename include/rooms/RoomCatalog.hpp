@@ -10,6 +10,17 @@
 
 namespace deep_shelter::rooms {
 
+template <std::size_t Size>
+[[nodiscard]] constexpr std::uint32_t room_stable_key(
+    const char (&id)[Size]) noexcept {
+    std::uint32_t hash = 2166136261u;
+    for (std::size_t index = 0; index + 1u < Size; ++index) {
+        hash ^= static_cast<std::uint8_t>(id[index]);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
 [[nodiscard]] constexpr std::uint32_t room_stable_key(
     std::string_view id) noexcept {
     std::uint32_t hash = 2166136261u;
