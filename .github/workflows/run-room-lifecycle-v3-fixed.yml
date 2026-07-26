@@ -16,34 +16,40 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/playable-room-lifecycle
-      - name: Extract corrected V3 patch
+      - name: Extract and run source-only V3 patch
         shell: bash
         run: |
-          python3 - <<'PY'
+          set +e
+          python3 - <<'PY' > corrected-v3-patch.log 2>&1
           from pathlib import Path
-          source = Path('.github/workflows/apply-room-lifecycle-v3.yml').read_text()
+          import re
+          workflow = Path('.github/workflows/apply-room-lifecycle-v3.yml').read_text()
           start_marker = "          python3 - <<'PY'\n"
           end_marker = "          PY\n      - name: Run host tests"
-          start = source.index(start_marker) + len(start_marker)
-          end = source.index(end_marker, start)
-          lines = source[start:end].splitlines()
+          start = workflow.index(start_marker) + len(start_marker)
+          end = workflow.index(end_marker, start)
+          lines = workflow[start:end].splitlines()
           script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
-          header_start = script.index("header = Path('include/gameplay/PlayableShelterSession.hpp')")
-          source_start = script.index("source = Path('source/PlayableShelterSession.cpp')", header_start)
-          script = script[:header_start] + script[source_start:]
-          Path('/tmp/apply_room_lifecycle_v3.py').write_text(script)
+          match = re.search(r"source\s*=\s*Path\('source/PlayableShelterSession\.cpp'\)", script)
+          if match is None:
+              raise SystemExit('source patch start missing')
+          Path('/tmp/apply_room_lifecycle_v3.py').write_text(script[match.start():])
           PY
-          set +e
-          python3 /tmp/apply_room_lifecycle_v3.py > corrected-v3-patch.log 2>&1
-          status=$?
+          extract_status=$?
+          if [ "$extract_status" -eq 0 ]; then
+            python3 /tmp/apply_room_lifecycle_v3.py >> corrected-v3-patch.log 2>&1
+            patch_status=$?
+          else
+            patch_status=$extract_status
+          fi
           cat corrected-v3-patch.log
-          if [ "$status" -ne 0 ]; then
+          if [ "$patch_status" -ne 0 ]; then
             git config user.name github-actions[bot]
             git config user.email 41898282+github-actions[bot]@users.noreply.github.com
             git add corrected-v3-patch.log
             git commit -m "Capture corrected V3 patch failure"
             git push origin HEAD:agent/playable-room-lifecycle
-            exit "$status"
+            exit "$patch_status"
           fi
       - name: Run host tests
         run: bash scripts/run_host_tests.sh
