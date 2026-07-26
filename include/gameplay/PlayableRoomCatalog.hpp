@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "gameplay/PlayableShelterSession.hpp"
@@ -12,8 +13,8 @@ struct PlayableRoomCatalogEntry {
     const rooms::RoomDefinition* definition = nullptr;
     PlayableRoomType behavior = PlayableRoomType::Workshop;
     bool unlocked = false;
-    const char* reason = nullptr;
-    const char* next_step = nullptr;
+    std::string reason;
+    std::string next_step;
 };
 
 class PlayableRoomCatalog {
