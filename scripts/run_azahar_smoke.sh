@@ -93,8 +93,12 @@ grep -q 'resident_state=transit' azahar-playable-smoke.log
 grep -q 'movement_ticks=7' azahar-playable-smoke.log
 grep -q 'invalid_result=invalid-placement' azahar-playable-smoke.log
 grep -q 'invalid_unchanged=1' azahar-playable-smoke.log
-grep -q 'seeded=1' azahar-playable-smoke.log
+grep -q 'first_saved=1' azahar-playable-smoke.log
+grep -q 'backup_absent_after_first=1' azahar-playable-smoke.log
+grep -q 'backup_rotated=1' azahar-playable-smoke.log
 grep -q 'saved=1' azahar-playable-smoke.log
+grep -q 'first_save_status=0' azahar-playable-smoke.log
+grep -q 'save_status=0' azahar-playable-smoke.log
 
 stop_azahar
 

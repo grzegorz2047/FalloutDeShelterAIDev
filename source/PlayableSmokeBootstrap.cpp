@@ -33,20 +33,6 @@ bool create_flag(const char* path) noexcept {
     return std::fclose(flag) == 0;
 }
 
-bool seed_existing_save() noexcept {
-    const std::vector<std::uint8_t> bytes = encode_playable_state(
-        PlayableShelterState{PlayableShelterState::RawDefaultsTag{}});
-    if (bytes.empty()) return false;
-    const std::string path = std::string(kSmokeSavePath) + ".sav";
-    FILE* file = std::fopen(path.c_str(), "wb");
-    if (file == nullptr) return false;
-    const bool written =
-        std::fwrite(bytes.data(), 1u, bytes.size(), file) == bytes.size() &&
-        std::fflush(file) == 0;
-    const bool closed = std::fclose(file) == 0;
-    return written && closed;
-}
-
 const char* resident_state_label(PlayableResidentState state) noexcept {
     switch (state) {
         case PlayableResidentState::Roaming: return "roaming";
@@ -98,13 +84,27 @@ void run_phase_one(PlayableShelterState& output) noexcept {
         for (int step = 0; step < 7; ++step) smoke.fixed_step();
     }
 
-    const bool seeded = ok && seed_existing_save();
-    const PlayableSaveStatus save_status =
-        seeded ? save_playable_state(kSmokeSavePath, smoke.state())
-               : PlayableSaveStatus::IoError;
-    const bool saved = save_status == PlayableSaveStatus::Ok;
+    const PlayableSaveStatus first_save_status =
+        ok ? save_playable_state(kSmokeSavePath, smoke.state())
+           : PlayableSaveStatus::IoError;
+    const bool first_saved =
+        first_save_status == PlayableSaveStatus::Ok;
+    const std::string backup_path =
+        std::string(kSmokeSavePath) + ".bak";
+    FILE* unexpected_backup = std::fopen(backup_path.c_str(), "rb");
+    const bool backup_absent_after_first = unexpected_backup == nullptr;
+    if (unexpected_backup != nullptr) std::fclose(unexpected_backup);
+    const PlayableSaveStatus second_save_status =
+        first_saved ? save_playable_state(kSmokeSavePath, smoke.state())
+                    : PlayableSaveStatus::IoError;
+    FILE* rotated_backup = std::fopen(backup_path.c_str(), "rb");
+    const bool backup_rotated = rotated_backup != nullptr;
+    if (rotated_backup != nullptr) std::fclose(rotated_backup);
+    const bool saved =
+        second_save_status == PlayableSaveStatus::Ok;
     const bool resume_armed = saved && create_flag(kSmokeResumeFlagPath);
-    ok = ok && seeded && saved && resume_armed;
+    ok = ok && first_saved && backup_absent_after_first &&
+         backup_rotated && saved && resume_armed;
     if (ok) output = smoke.state();
 
     int elevator_count = 0;
@@ -124,8 +124,9 @@ void run_phase_one(PlayableShelterState& output) noexcept {
             "DEEP_SHELTER_PLAYABLE phase=build status=%s rooms=%d "
             "credits=%d elevators=%d power=%d food=%d selected=%d "
             "assigned=%d resident_state=%s movement_ticks=%d "
-            "invalid_result=%s invalid_unchanged=%d seeded=%d saved=%d "
-            "save_status=%d\n",
+            "invalid_result=%s invalid_unchanged=%d first_saved=%d "
+            "backup_absent_after_first=%d backup_rotated=%d saved=%d "
+            "first_save_status=%d save_status=%d\n",
             ok ? "ok" : "failed",
             smoke.state().rooms,
             smoke.state().credits,
@@ -140,9 +141,12 @@ void run_phase_one(PlayableShelterState& output) noexcept {
                 ? "invalid-placement"
                 : "unexpected",
             invalid_unchanged ? 1 : 0,
-            seeded ? 1 : 0,
+            first_saved ? 1 : 0,
+            backup_absent_after_first ? 1 : 0,
+            backup_rotated ? 1 : 0,
             saved ? 1 : 0,
-            static_cast<int>(save_status));
+            static_cast<int>(first_save_status),
+            static_cast<int>(second_save_status));
         std::fclose(log);
     }
 }

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -281,12 +282,38 @@ void v1_migrates_to_v2_and_atomic_backup_recovers() {
     assert(encode_playable_state(invalid).empty());
 
     const std::string path = make_temp_path();
+    assert(access((path + ".sav").c_str(), F_OK) != 0);
+    assert(access((path + ".bak").c_str(), F_OK) != 0);
     assert(save_playable_state(path, migrated.state) ==
            PlayableSaveStatus::Ok);
+    assert(access((path + ".sav").c_str(), F_OK) == 0);
+    assert(access((path + ".bak").c_str(), F_OK) != 0);
     PlayableShelterSession newer(migrated.state);
     for (int step = 0; step < 10; ++step) newer.fixed_step();
     assert(save_playable_state(path, newer.state()) ==
            PlayableSaveStatus::Ok);
+    assert(access((path + ".bak").c_str(), F_OK) == 0);
+    std::ifstream backup_file(path + ".bak", std::ios::binary);
+    const std::vector<std::uint8_t> backup_bytes(
+        (std::istreambuf_iterator<char>(backup_file)),
+        std::istreambuf_iterator<char>());
+    const auto decoded_backup = decode_playable_state(backup_bytes);
+    assert(decoded_backup.status == PlayableSaveStatus::Ok);
+    assert(decoded_backup.state.room_entries[1].production_steps == 73);
+
+    assert(std::remove((path + ".sav").c_str()) == 0);
+    assert(save_playable_state(path, newer.state()) ==
+           PlayableSaveStatus::Ok);
+    assert(access((path + ".sav").c_str(), F_OK) == 0);
+    assert(access((path + ".bak").c_str(), F_OK) == 0);
+    std::ifstream preserved_backup_file(path + ".bak", std::ios::binary);
+    const std::vector<std::uint8_t> preserved_backup_bytes(
+        (std::istreambuf_iterator<char>(preserved_backup_file)),
+        std::istreambuf_iterator<char>());
+    const auto preserved_backup = decode_playable_state(
+        preserved_backup_bytes);
+    assert(preserved_backup.status == PlayableSaveStatus::Ok);
+    assert(preserved_backup.state.room_entries[1].production_steps == 73);
 
     std::ofstream broken(path + ".sav",
                          std::ios::binary | std::ios::trunc);
