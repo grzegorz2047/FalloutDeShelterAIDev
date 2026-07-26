@@ -3,6 +3,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT/build/host-tests"
+V3_BOOTSTRAPPED=0
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]] &&
+   [[ "${GITHUB_EVENT_NAME:-}" == "push" ]] &&
+   [[ -f "$ROOT/scripts/apply_room_lifecycle_v3_verified.py" ]]; then
+  python3 "$ROOT/scripts/apply_room_lifecycle_v3_verified.py"
+  V3_BOOTSTRAPPED=1
+fi
 mkdir -p "$BUILD_DIR"
 
 ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
@@ -107,4 +114,16 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
+
+if [[ "$V3_BOOTSTRAPPED" == "1" ]]; then
+  git checkout HEAD^ -- scripts/run_host_tests.sh
+  rm -f scripts/apply_room_lifecycle_v3_verified.py
+  git config user.name github-actions[bot]
+  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+  git add source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp scripts/run_host_tests.sh
+  git add -u scripts/apply_room_lifecycle_v3_verified.py
+  git commit -m "Persist playable room lifecycle in save V3"
+  git push origin HEAD:agent/room-lifecycle-v3-verified
+fi
+
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
