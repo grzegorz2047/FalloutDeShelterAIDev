@@ -13,6 +13,7 @@
 #include "render/Scene3DRenderer.hpp"
 #include "render/ShelterCamera.hpp"
 #include "render/ShelterSceneLayout.hpp"
+#include "render/ShelterView3D.hpp"
 #include "ui/GeneratedUiRenderer.hpp"
 #include "ui/ShelterHudLayout.hpp"
 #include "ui/UiFramework.hpp"
@@ -534,7 +535,8 @@ int main() {
         }
         sync_ui_availability(ui, session, ui_availability);
         const auto& state = session.state();
-        const float stereo = osGet3DSliderState() * 0.035f;
+        const float stereo =
+            osGet3DSliderState() * deep_shelter::render::kShelterStereoFullSlider;
         const ShelterSceneState3D scene_state{state.rooms,
                                                state.selected_room,
                                                session.selected_stored(),

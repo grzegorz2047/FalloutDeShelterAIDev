@@ -7,6 +7,7 @@
 #include "dweller_v_shbin.h"
 #include "render/RoomVisualProfiles.hpp"
 #include "render/ShelterSceneLayout.hpp"
+#include "render/ShelterView3D.hpp"
 
 namespace deep_shelter::render {
 namespace {
@@ -237,24 +238,9 @@ void DwellerBillboardRenderer::draw(
                   GPU_PRIMARY_COLOR);
     C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
 
-    const float zoom = camera.zoom();
-    const float center_x = camera.x() + 200.0f / zoom;
-    const float center_y = camera.y() + 120.0f / zoom;
     C3D_Mtx projection;
-    Mtx_PerspStereoTilt(&projection,
-                        C3D_AngleFromDegrees(22.0f),
-                        C3D_AspectRatioTop,
-                        1.0f,
-                        2000.0f,
-                        stereo_eye,
-                        3.0f,
-                        false);
     C3D_Mtx view;
-    Mtx_LookAt(&view,
-               FVec3_New(center_x, center_y, 1120.0f / zoom),
-               FVec3_New(center_x, center_y, 0.0f),
-               FVec3_New(0.0f, -1.0f, 0.0f),
-               false);
+    build_shelter_view_matrices(projection, view, camera, stereo_eye);
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, projection_uniform_, &projection);
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, model_view_uniform_, &view);
 

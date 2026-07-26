@@ -17,7 +17,7 @@ The two stereoscopic top targets therefore consume about 1.46 MiB. The lower UI 
 
 ## Other known allocations
 
-- Generated material atlas: 4 KiB in RGB565.
+- Room texture/prop atlas: 256 KiB in RGBA5551.
 - Scene vertex buffer: 8,192 vertices, allocated once in linear memory.
 - UI atlas and Citro2D internal buffers are separate and must be included in future runtime telemetry.
 

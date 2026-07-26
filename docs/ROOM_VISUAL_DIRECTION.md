@@ -26,7 +26,9 @@ The previous single-draw-call target is intentionally superseded by visual quali
 
 ## Progress communication
 
-Normal gameplay still starts with one completed room. Future rooms remain dark excavated cavities with muted blueprint silhouettes, so progression is not falsely communicated as already complete.
+Normal gameplay still starts with one completed room. Future rooms are deep
+rock excavations without blueprint furniture, so they cannot be mistaken for
+functioning rooms or abstract wireframe equipment.
 
 ## Review checklist
 

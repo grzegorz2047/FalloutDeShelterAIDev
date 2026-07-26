@@ -4,12 +4,13 @@ namespace deep_shelter::render {
 namespace {
 
 constexpr std::size_t kVerticesPerBox = 36;
+constexpr std::size_t kVerticesPerBillboard = 6;
 constexpr float kByteToUnit = 1.0f / 255.0f;
-constexpr float kMaterialWidth =
-    1.0f / static_cast<float>(assets::kGeneratedMaterialTileCount);
-// Keep bilinear samples inside a material tile. At 16 pixels per tile this
-// inset is a little over one texture-pixel in atlas UV space.
-constexpr float kUvInset = 0.0045f;
+constexpr float kAtlasWidth =
+    static_cast<float>(assets::kRoomAssetAtlasWidth);
+constexpr float kAtlasHeight =
+    static_cast<float>(assets::kRoomAssetAtlasHeight);
+constexpr float kUvInsetPixels = 0.5f;
 
 struct Position3D { float x; float y; float z; };
 struct Normal3D { float x; float y; float z; };
@@ -35,9 +36,9 @@ void write_face(Vertex3D* out,
                 const Normal3D& normal,
                 float u0,
                 float u1,
+                float v0,
+                float v1,
                 std::uint32_t color) noexcept {
-    constexpr float v0 = kUvInset;
-    constexpr float v1 = 1.0f - kUvInset;
     const Vertex3D a = make_vertex(top_left, u0, v0, normal, color);
     const Vertex3D b = make_vertex(top_right, u1, v0, normal, color);
     const Vertex3D c = make_vertex(bottom_right, u1, v1, normal, color);
@@ -55,6 +56,7 @@ void write_face(Vertex3D* out,
 void SceneMesh3D::clear() noexcept {
     vertex_count_ = 0;
     box_count_ = 0;
+    billboard_count_ = 0;
     overflowed_ = false;
 }
 
@@ -75,8 +77,18 @@ bool SceneMesh3D::append_box(const Box3D& box) noexcept {
     const float z1 = box.z + box.depth;
     const std::uint32_t color = box.color;
     const float material = static_cast<float>(box.material);
-    const float u0 = material * kMaterialWidth + kUvInset;
-    const float u1 = (material + 1.0f) * kMaterialWidth - kUvInset;
+    const float tile_x = material *
+                         static_cast<float>(assets::kRoomMaterialTileSize);
+    const float u0 = (tile_x + kUvInsetPixels) / kAtlasWidth;
+    const float u1 =
+        (tile_x + static_cast<float>(assets::kRoomMaterialTileSize) -
+         kUvInsetPixels) /
+        kAtlasWidth;
+    const float v0 = 1.0f - kUvInsetPixels / kAtlasHeight;
+    const float v1 =
+        1.0f -
+        (static_cast<float>(assets::kRoomMaterialTileSize) - kUvInsetPixels) /
+            kAtlasHeight;
 
     const Position3D p000{x0, y0, z0};
     const Position3D p001{x0, y0, z1};
@@ -95,15 +107,66 @@ bool SceneMesh3D::append_box(const Box3D& box) noexcept {
     constexpr Normal3D top{0.0f, -1.0f, 0.0f};
 
     Vertex3D* out = vertices_.data() + vertex_count_;
-    write_face(out + 0, p001, p101, p111, p011, front, u0, u1, color);
-    write_face(out + 6, p100, p000, p010, p110, back, u0, u1, color);
-    write_face(out + 12, p000, p001, p011, p010, left, u0, u1, color);
-    write_face(out + 18, p101, p100, p110, p111, right, u0, u1, color);
-    write_face(out + 24, p010, p011, p111, p110, bottom, u0, u1, color);
-    write_face(out + 30, p000, p100, p101, p001, top, u0, u1, color);
+    write_face(out + 0, p001, p101, p111, p011, front, u0, u1, v0, v1, color);
+    write_face(out + 6, p100, p000, p010, p110, back, u0, u1, v0, v1, color);
+    write_face(out + 12, p000, p001, p011, p010, left, u0, u1, v0, v1, color);
+    write_face(out + 18, p101, p100, p110, p111, right, u0, u1, v0, v1, color);
+    write_face(out + 24, p010, p011, p111, p110, bottom, u0, u1, v0, v1, color);
+    write_face(out + 30, p000, p100, p101, p001, top, u0, u1, v0, v1, color);
 
     vertex_count_ += kVerticesPerBox;
     ++box_count_;
+    return true;
+}
+
+bool SceneMesh3D::append_billboard(const Billboard3D& billboard) noexcept {
+    if (billboard.width <= 0.0f || billboard.height <= 0.0f ||
+        billboard.region.width == 0u || billboard.region.height == 0u) {
+        return false;
+    }
+    if (vertex_count_ + kVerticesPerBillboard > vertices_.size()) {
+        overflowed_ = true;
+        return false;
+    }
+
+    const float u0 =
+        (static_cast<float>(billboard.region.x) + kUvInsetPixels) / kAtlasWidth;
+    const float u1 =
+        (static_cast<float>(billboard.region.x + billboard.region.width) -
+         kUvInsetPixels) /
+        kAtlasWidth;
+    const float v0 =
+        1.0f -
+        (static_cast<float>(billboard.region.y) + kUvInsetPixels) /
+            kAtlasHeight;
+    const float v1 =
+        1.0f -
+        (static_cast<float>(billboard.region.y + billboard.region.height) -
+         kUvInsetPixels) /
+            kAtlasHeight;
+    constexpr Normal3D front{0.0f, 0.0f, 1.0f};
+    const Position3D top_left{billboard.x, billboard.y, billboard.z};
+    const Position3D top_right{
+        billboard.x + billboard.width, billboard.y, billboard.z};
+    const Position3D bottom_right{
+        billboard.x + billboard.width,
+        billboard.y + billboard.height,
+        billboard.z};
+    const Position3D bottom_left{
+        billboard.x, billboard.y + billboard.height, billboard.z};
+    write_face(vertices_.data() + vertex_count_,
+               top_left,
+               top_right,
+               bottom_right,
+               bottom_left,
+               front,
+               u0,
+               u1,
+               v0,
+               v1,
+               billboard.color);
+    vertex_count_ += kVerticesPerBillboard;
+    ++billboard_count_;
     return true;
 }
 

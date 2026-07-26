@@ -1,3 +1,5 @@
 path,category,author_or_generator,source,license,date,notes
 assets/manifest.csv,metadata,grzegorz2047,original,CC0-1.0,2026-07-24,Manifest schema and initial self-entry
+assets/room_assets_atlas.png,texture-and-prop-atlas,grzegorz2047 (project-supplied),https://github.com/grzegorz2047/FalloutDeShelterAIDev/issues/85,LicenseRef-Project-Owner-Permission,2026-07-25,"Compact selection of eight textures and twelve props uploaded by the repository owner in issue #85 and explicitly requested for in-game integration"
+data/room_assets.bin,runtime-texture,scripts/generate_room_asset_atlas.py,assets/room_assets_atlas.png,LicenseRef-Project-Owner-Permission,2026-07-26,"Reproducible 512x256 PICA-tiled RGBA5551 encoding of the source atlas; contains no additional artwork"
 romfs/data/catalog.json,game-data,grzegorz2047,original,CC0-1.0,2026-07-24,Versioned original gameplay catalog and translations

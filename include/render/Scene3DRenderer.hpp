@@ -73,12 +73,6 @@ private:
     void build_scene(const ShelterCamera& camera,
                      const ShelterSceneState3D& state,
                      RenderStats& stats) noexcept;
-    void append_room(float x,
-                     float y,
-                     int room_index,
-                     bool active,
-                     bool selected,
-                     int stored) noexcept;
 
     SceneMesh3D mesh_{};
     shaderProgram_s program_{};
