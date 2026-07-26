@@ -160,7 +160,7 @@ inline void record_previous_frame() noexcept {
     value.previous_valid = false;
 }
 
-[[nodiscard]] inline bool frame_begin(u8 flags) noexcept {
+inline bool frame_begin(u8 flags) noexcept {
     record_previous_frame();
     const bool begun = C3D_FrameBegin(flags);
     if (begun) {
