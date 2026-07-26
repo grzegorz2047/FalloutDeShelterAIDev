@@ -301,6 +301,20 @@ void v1_migrates_to_v2_and_atomic_backup_recovers() {
     assert(decoded_backup.status == PlayableSaveStatus::Ok);
     assert(decoded_backup.state.room_entries[1].production_steps == 73);
 
+    assert(std::remove((path + ".sav").c_str()) == 0);
+    assert(save_playable_state(path, newer.state()) ==
+           PlayableSaveStatus::Ok);
+    assert(access((path + ".sav").c_str(), F_OK) == 0);
+    assert(access((path + ".bak").c_str(), F_OK) == 0);
+    std::ifstream preserved_backup_file(path + ".bak", std::ios::binary);
+    const std::vector<std::uint8_t> preserved_backup_bytes(
+        (std::istreambuf_iterator<char>(preserved_backup_file)),
+        std::istreambuf_iterator<char>());
+    const auto preserved_backup = decode_playable_state(
+        preserved_backup_bytes);
+    assert(preserved_backup.status == PlayableSaveStatus::Ok);
+    assert(preserved_backup.state.room_entries[1].production_steps == 73);
+
     std::ofstream broken(path + ".sav",
                          std::ios::binary | std::ios::trunc);
     broken << "broken";

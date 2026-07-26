@@ -1192,8 +1192,6 @@ PlayableSaveStatus save_playable_state(
     } else if (current.status != PlayableSaveStatus::Missing) {
         std::remove(temp.c_str());
         return PlayableSaveStatus::IoError;
-    } else {
-        std::remove(backup.c_str());
     }
     if (std::rename(temp.c_str(), main.c_str()) != 0) {
         std::rename(backup.c_str(), main.c_str());
