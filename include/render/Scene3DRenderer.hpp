@@ -136,6 +136,11 @@ inline void initialize_log() noexcept {
     value.log_initialized = true;
 }
 
+[[nodiscard]] inline bool benchmark_sequence_enabled() noexcept {
+    initialize_log();
+    return state().benchmark_sequence;
+}
+
 inline void emit_bucket(const char* mode, FrameBucket& bucket) noexcept {
     if (bucket.samples < 120) return;
 
