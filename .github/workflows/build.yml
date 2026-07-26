@@ -131,8 +131,6 @@ jobs:
           HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
           azahar_pid=$!
 
-          # The one-shot SD marker records one mono bucket, then automatically
-          # forces the physical slider value to full stereo for later buckets.
           for second in $(seq 1 18); do
             sleep 1
             if ! kill -0 "$azahar_pid" 2>/dev/null; then
@@ -154,36 +152,41 @@ jobs:
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
 
-          # Default Azahar keyboard mapping: A=Z, L=Q, R=W and D-pad=arrows.
-          # Enter build mode from the focused HUD, create a connected vertical
-          # shaft and then two distinct room types through the normal controls.
-          xdotool key Right
-          xdotool key z
-          sleep 0.5
+          touch_control() {
+            xdotool mousemove --sync "$1" "$2"
+            xdotool mousedown 1
+            sleep 0.2
+            xdotool mouseup 1
+            sleep 0.4
+          }
+
+          # Bottom-screen coordinates at the fixed 1280x720 Xvfb geometry.
+          # Enter build mode by touch. Azahar defaults: A=Z, R=W and
+          # D-pad down/right=G/H (arrow keys belong to the Circle Pad).
+          touch_control 740 590
           for press in $(seq 1 5); do xdotool key w; done
           xdotool key z
           sleep 0.5
 
-          xdotool key z
-          xdotool key Down
+          touch_control 740 590
+          xdotool key g
           xdotool key z
           sleep 0.5
 
-          xdotool key z
+          touch_control 740 590
           xdotool key w
-          xdotool key Right
+          xdotool key h
           xdotool key z
           sleep 0.5
 
-          xdotool key z
+          touch_control 740 590
           xdotool key w
-          xdotool key Right
+          xdotool key h
           xdotool key z
           sleep 0.5
 
-          # Move focus back to the primary action and assign the first resident.
-          xdotool key Left
-          xdotool key z
+          # Assign a resident through the large primary touch target.
+          touch_control 590 590
           sleep 4
 
           timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
