@@ -1,8 +1,10 @@
 #include "gameplay/PlayableShelterSession.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 
 #include "persistence/SaveData.hpp"
 
@@ -10,10 +12,382 @@ namespace deep_shelter::gameplay {
 namespace {
 
 constexpr std::uint32_t kPlayableSaveMagic = 0x33505344u;  // DSP3
-constexpr std::uint16_t kPlayableSaveVersion = 1u;
+constexpr std::uint16_t kPlayableSaveVersionV1 = 1u;
+constexpr std::uint16_t kPlayableSaveVersionV2 = 2u;
 constexpr std::size_t kPlayableSaveHeaderSize = 16u;
-constexpr std::size_t kPlayableSavePayloadSize = 76u;
+constexpr std::size_t kPlayableSavePayloadSizeV1 = 76u;
+constexpr std::size_t kPlayableSaveScalarCountV2 = 10u;
+constexpr std::size_t kPlayableRoomFieldCountV2 = 6u;
+constexpr std::size_t kPlayableResidentFieldCountV2 = 12u;
+constexpr std::size_t kPlayableSavePayloadSizeV2 =
+    (kPlayableSaveScalarCountV2 +
+     static_cast<std::size_t>(kPlayableMaxRooms) * 2u +
+     static_cast<std::size_t>(kPlayableRoomCapacity) *
+         kPlayableRoomFieldCountV2 +
+     static_cast<std::size_t>(kPlayableResidentCount) *
+         kPlayableResidentFieldCountV2) *
+    sizeof(std::int32_t);
 constexpr std::size_t kMaximumPlayableSaveSize = 4096u;
+constexpr int kRoamingPauseTicks = 60;
+
+bool valid_room_type(PlayableRoomType type) noexcept {
+    const int value = static_cast<int>(type);
+    return value >= static_cast<int>(PlayableRoomType::Power) &&
+           value <= static_cast<int>(PlayableRoomType::Elevator);
+}
+
+bool valid_resident_state(PlayableResidentState state) noexcept {
+    const int value = static_cast<int>(state);
+    return value >= static_cast<int>(PlayableResidentState::Roaming) &&
+           value <= static_cast<int>(PlayableResidentState::Working);
+}
+
+bool in_grid(int column, int floor) noexcept {
+    return column >= 0 && column < kPlayableGridColumns &&
+           floor >= 0 && floor < kPlayableGridFloors;
+}
+
+int grid_index(int column, int floor) noexcept {
+    return floor * kPlayableGridColumns + column;
+}
+
+int room_cost(PlayableRoomType type) noexcept {
+    switch (type) {
+        case PlayableRoomType::Power:
+            return 100;
+        case PlayableRoomType::Food:
+        case PlayableRoomType::Water:
+            return 120;
+        case PlayableRoomType::Workshop:
+            return 140;
+        case PlayableRoomType::Living:
+            return 150;
+        case PlayableRoomType::Elevator:
+            return 50;
+    }
+    return 0;
+}
+
+bool room_produces(PlayableRoomType type) noexcept {
+    return type != PlayableRoomType::Living &&
+           type != PlayableRoomType::Elevator;
+}
+
+PlayableRoomType legacy_room_type(int room) noexcept {
+    switch (room) {
+        case 0:
+            return PlayableRoomType::Power;
+        case 1:
+            return PlayableRoomType::Food;
+        case 2:
+            return PlayableRoomType::Water;
+        case 3:
+            return PlayableRoomType::Workshop;
+        case 4:
+            return PlayableRoomType::Living;
+        default:
+            return PlayableRoomType::Workshop;
+    }
+}
+
+std::array<int, 2> legacy_room_position(int room) noexcept {
+    return {{room, 0}};
+}
+
+int room_index_at_state(const PlayableShelterState& state,
+                        int column,
+                        int floor) noexcept {
+    if (!in_grid(column, floor)) return -1;
+    for (int room = 0; room < kPlayableRoomCapacity; ++room) {
+        const auto& entry =
+            state.room_entries[static_cast<std::size_t>(room)];
+        if (entry.active && entry.column == column &&
+            entry.floor == floor) {
+            return room;
+        }
+    }
+    return -1;
+}
+
+bool is_elevator_cell(const PlayableShelterState& state,
+                      int column,
+                      int floor) noexcept {
+    const int room = room_index_at_state(state, column, floor);
+    return room >= 0 &&
+           state.room_entries[static_cast<std::size_t>(room)].type ==
+               PlayableRoomType::Elevator;
+}
+
+bool traversable_cell(const PlayableShelterState& state,
+                      int column,
+                      int floor) noexcept {
+    return room_index_at_state(state, column, floor) >= 0;
+}
+
+void seed_residents(PlayableShelterState& state) noexcept {
+    for (int index = 0; index < kPlayableResidentCount; ++index) {
+        auto& resident =
+            state.residents[static_cast<std::size_t>(index)];
+        resident.active = true;
+        resident.current_column = 0;
+        resident.current_floor = 0;
+        resident.next_column = resident.current_column;
+        resident.next_floor = resident.current_floor;
+        resident.destination_column = resident.current_column;
+        resident.destination_floor = 0;
+        resident.assigned_room = -1;
+        resident.state = PlayableResidentState::Roaming;
+        resident.movement_ticks = 0;
+        resident.roaming_ticks = 0;
+        resident.roaming_sequence = index;
+    }
+}
+
+void sync_legacy_fields(PlayableShelterState& state) noexcept {
+    int active_rooms = 0;
+    for (const auto& room : state.room_entries) {
+        if (room.active) ++active_rooms;
+    }
+    state.rooms = active_rooms;
+    for (int room = 0; room < kPlayableMaxRooms; ++room) {
+        const auto& entry =
+            state.room_entries[static_cast<std::size_t>(room)];
+        state.stored[static_cast<std::size_t>(room)] =
+            entry.active ? entry.stored : 0;
+        state.production_steps[static_cast<std::size_t>(room)] =
+            entry.active ? entry.production_steps : 0;
+    }
+    state.assigned_room =
+        state.residents[0].active ? state.residents[0].assigned_room : -1;
+}
+
+void upgrade_legacy_shape(PlayableShelterState& state) noexcept {
+    bool has_runtime_room = false;
+    for (const auto& room : state.room_entries) {
+        has_runtime_room = has_runtime_room || room.active;
+    }
+    if (!has_runtime_room) {
+        const int legacy_rooms =
+            std::max(1, std::min(state.rooms, kPlayableMaxRooms));
+        for (int room = 0; room < legacy_rooms; ++room) {
+            auto& entry =
+                state.room_entries[static_cast<std::size_t>(room)];
+            const auto position = legacy_room_position(room);
+            entry.active = true;
+            entry.type = legacy_room_type(room);
+            entry.column = position[0];
+            entry.floor = position[1];
+            entry.stored =
+                state.stored[static_cast<std::size_t>(room)];
+            entry.production_steps =
+                state.production_steps[static_cast<std::size_t>(room)];
+        }
+    }
+
+    bool has_resident = false;
+    for (const auto& resident : state.residents) {
+        has_resident = has_resident || resident.active;
+    }
+    if (!has_resident) seed_residents(state);
+
+    if (!has_resident &&
+        state.assigned_room >= 0 &&
+        state.assigned_room < kPlayableRoomCapacity &&
+        state.room_entries[
+            static_cast<std::size_t>(state.assigned_room)].active) {
+        auto& resident = state.residents[0];
+        const auto& room = state.room_entries[
+            static_cast<std::size_t>(state.assigned_room)];
+        resident.assigned_room = state.assigned_room;
+        resident.current_column = room.column;
+        resident.current_floor = room.floor;
+        resident.next_column = room.column;
+        resident.next_floor = room.floor;
+        resident.destination_column = room.column;
+        resident.destination_floor = room.floor;
+        resident.state = PlayableResidentState::Working;
+    }
+    sync_legacy_fields(state);
+}
+
+PlayableShelterState normalized_state(
+    PlayableShelterState state) noexcept {
+    upgrade_legacy_shape(state);
+    return state;
+}
+
+bool vertical_edge_allowed(const PlayableShelterState& state,
+                           int from_column,
+                           int from_floor,
+                           int to_column,
+                           int to_floor) noexcept {
+    return from_column == to_column &&
+           std::abs(from_floor - to_floor) == 1 &&
+           is_elevator_cell(state, from_column, from_floor) &&
+           is_elevator_cell(state, to_column, to_floor);
+}
+
+bool next_route_step(const PlayableShelterState& state,
+                     int start_column,
+                     int start_floor,
+                     int goal_column,
+                     int goal_floor,
+                     int& next_column,
+                     int& next_floor) noexcept {
+    if (!in_grid(start_column, start_floor) ||
+        !in_grid(goal_column, goal_floor) ||
+        !traversable_cell(state, start_column, start_floor) ||
+        !traversable_cell(state, goal_column, goal_floor)) {
+        return false;
+    }
+    if (start_column == goal_column && start_floor == goal_floor) {
+        next_column = start_column;
+        next_floor = start_floor;
+        return true;
+    }
+
+    constexpr int kCellCount =
+        kPlayableGridColumns * kPlayableGridFloors;
+    std::array<int, kCellCount> queue{};
+    std::array<int, kCellCount> previous{};
+    previous.fill(-1);
+    const int start = grid_index(start_column, start_floor);
+    const int goal = grid_index(goal_column, goal_floor);
+    previous[static_cast<std::size_t>(start)] = start;
+    queue[0] = start;
+    int head = 0;
+    int tail = 1;
+    constexpr std::array<int, 4> kColumnDelta{{-1, 1, 0, 0}};
+    constexpr std::array<int, 4> kFloorDelta{{0, 0, -1, 1}};
+
+    while (head < tail && previous[static_cast<std::size_t>(goal)] < 0) {
+        const int current = queue[static_cast<std::size_t>(head++)];
+        const int column = current % kPlayableGridColumns;
+        const int floor = current / kPlayableGridColumns;
+        for (std::size_t direction = 0;
+             direction < kColumnDelta.size(); ++direction) {
+            const int candidate_column =
+                column + kColumnDelta[direction];
+            const int candidate_floor =
+                floor + kFloorDelta[direction];
+            if (!in_grid(candidate_column, candidate_floor) ||
+                !traversable_cell(
+                    state, candidate_column, candidate_floor)) {
+                continue;
+            }
+            if (candidate_floor != floor &&
+                !vertical_edge_allowed(
+                    state, column, floor,
+                    candidate_column, candidate_floor)) {
+                continue;
+            }
+            const int candidate =
+                grid_index(candidate_column, candidate_floor);
+            if (previous[static_cast<std::size_t>(candidate)] >= 0) {
+                continue;
+            }
+            previous[static_cast<std::size_t>(candidate)] = current;
+            queue[static_cast<std::size_t>(tail++)] = candidate;
+        }
+    }
+    if (previous[static_cast<std::size_t>(goal)] < 0) return false;
+
+    int step = goal;
+    while (previous[static_cast<std::size_t>(step)] != start) {
+        step = previous[static_cast<std::size_t>(step)];
+    }
+    next_column = step % kPlayableGridColumns;
+    next_floor = step / kPlayableGridColumns;
+    return true;
+}
+
+bool route_exists(const PlayableShelterState& state,
+                  const PlayableResidentEntry& resident,
+                  const PlayableRoomEntry& room) noexcept {
+    int ignored_column = 0;
+    int ignored_floor = 0;
+    return next_route_step(
+        state, resident.current_column, resident.current_floor,
+        room.column, room.floor, ignored_column, ignored_floor);
+}
+
+void step_resident(PlayableShelterState& state,
+                   PlayableResidentEntry& resident) noexcept {
+    if (!resident.active) return;
+
+    if (resident.state == PlayableResidentState::Roaming &&
+        resident.current_column == resident.destination_column &&
+        resident.current_floor == resident.destination_floor) {
+        ++resident.roaming_ticks;
+        if (resident.roaming_ticks < kRoamingPauseTicks) return;
+        resident.roaming_ticks = 0;
+        ++resident.roaming_sequence;
+        const int first_slot =
+            resident.roaming_sequence % kPlayableRoomCapacity;
+        bool found_destination = false;
+        for (int offset = 0;
+             offset < kPlayableRoomCapacity; ++offset) {
+            const int slot =
+                (first_slot + offset) % kPlayableRoomCapacity;
+            const auto& room =
+                state.room_entries[static_cast<std::size_t>(slot)];
+            if (!room.active ||
+                (room.column == resident.current_column &&
+                 room.floor == resident.current_floor)) {
+                continue;
+            }
+            int ignored_column = 0;
+            int ignored_floor = 0;
+            if (next_route_step(
+                    state,
+                    resident.current_column,
+                    resident.current_floor,
+                    room.column,
+                    room.floor,
+                    ignored_column,
+                    ignored_floor)) {
+                resident.destination_column = room.column;
+                resident.destination_floor = room.floor;
+                found_destination = true;
+                break;
+            }
+        }
+        if (!found_destination) return;
+    }
+
+    if (resident.state == PlayableResidentState::Working) return;
+    if (resident.current_column == resident.destination_column &&
+        resident.current_floor == resident.destination_floor) {
+        if (resident.state == PlayableResidentState::Transit) {
+            resident.state = PlayableResidentState::Working;
+            resident.movement_ticks = 0;
+        }
+        return;
+    }
+
+    if (resident.next_column == resident.current_column &&
+        resident.next_floor == resident.current_floor) {
+        if (!next_route_step(
+                state, resident.current_column, resident.current_floor,
+                resident.destination_column, resident.destination_floor,
+                resident.next_column, resident.next_floor)) {
+            return;
+        }
+    }
+
+    ++resident.movement_ticks;
+    if (resident.movement_ticks < kPlayableMovementStepTicks) return;
+    resident.movement_ticks = 0;
+    resident.current_column = resident.next_column;
+    resident.current_floor = resident.next_floor;
+    resident.next_column = resident.current_column;
+    resident.next_floor = resident.current_floor;
+    if (resident.current_column == resident.destination_column &&
+        resident.current_floor == resident.destination_floor &&
+        resident.state == PlayableResidentState::Transit) {
+        resident.state = PlayableResidentState::Working;
+    }
+}
 
 void append_u16(std::vector<std::uint8_t>& output,
                 std::uint16_t value) {
@@ -63,6 +437,24 @@ bool read_i32(const std::vector<std::uint8_t>& input,
     return true;
 }
 
+bool read_enum(const std::vector<std::uint8_t>& input,
+               std::size_t& offset,
+               PlayableRoomType& value) noexcept {
+    int encoded = 0;
+    if (!read_i32(input, offset, encoded)) return false;
+    value = static_cast<PlayableRoomType>(encoded);
+    return valid_room_type(value);
+}
+
+bool read_enum(const std::vector<std::uint8_t>& input,
+               std::size_t& offset,
+               PlayableResidentState& value) noexcept {
+    int encoded = 0;
+    if (!read_i32(input, offset, encoded)) return false;
+    value = static_cast<PlayableResidentState>(encoded);
+    return valid_resident_state(value);
+}
+
 PlayableSaveStatus read_file(const std::string& path,
                              std::vector<std::uint8_t>& bytes) {
     FILE* file = std::fopen(path.c_str(), "rb");
@@ -101,95 +493,403 @@ PlayableLoadResult load_one(const std::string& path) {
     return decode_playable_state(bytes);
 }
 
+bool read_v1_payload(const std::vector<std::uint8_t>& body,
+                     PlayableShelterState& state) noexcept {
+    std::size_t offset = 0u;
+    if (!read_i32(body, offset, state.credits) ||
+        !read_i32(body, offset, state.power) ||
+        !read_i32(body, offset, state.food) ||
+        !read_i32(body, offset, state.water) ||
+        !read_i32(body, offset, state.rooms) ||
+        !read_i32(body, offset, state.selected_room) ||
+        !read_i32(body, offset, state.assigned_room)) {
+        return false;
+    }
+    for (int& value : state.stored) {
+        if (!read_i32(body, offset, value)) return false;
+    }
+    for (int& value : state.production_steps) {
+        if (!read_i32(body, offset, value)) return false;
+    }
+    if (offset != body.size() ||
+        state.credits < 0 ||
+        state.power < 0 || state.power > 100 ||
+        state.food < 0 || state.food > 100 ||
+        state.water < 0 || state.water > 100 ||
+        state.rooms < 1 || state.rooms > kPlayableMaxRooms ||
+        state.selected_room < 0 ||
+        state.selected_room >= state.rooms ||
+        state.assigned_room < -1 ||
+        state.assigned_room >= state.rooms) {
+        return false;
+    }
+    for (std::size_t room = 0; room < state.stored.size(); ++room) {
+        if (state.stored[room] < 0 ||
+            state.stored[room] > kPlayableStorageCapacity ||
+            state.production_steps[room] < 0 ||
+            state.production_steps[room] >=
+                kPlayableProductionCycleSteps) {
+            return false;
+        }
+    }
+    upgrade_legacy_shape(state);
+    return valid_playable_state(state);
+}
+
+bool read_v2_payload(const std::vector<std::uint8_t>& body,
+                     PlayableShelterState& state) noexcept {
+    std::size_t offset = 0u;
+    if (!read_i32(body, offset, state.credits) ||
+        !read_i32(body, offset, state.power) ||
+        !read_i32(body, offset, state.food) ||
+        !read_i32(body, offset, state.water) ||
+        !read_i32(body, offset, state.rooms) ||
+        !read_i32(body, offset, state.selected_room) ||
+        !read_i32(body, offset, state.assigned_room) ||
+        !read_enum(body, offset, state.selected_build_type) ||
+        !read_i32(body, offset, state.build_cursor_column) ||
+        !read_i32(body, offset, state.build_cursor_floor)) {
+        return false;
+    }
+    for (int& value : state.stored) {
+        if (!read_i32(body, offset, value)) return false;
+    }
+    for (int& value : state.production_steps) {
+        if (!read_i32(body, offset, value)) return false;
+    }
+    for (auto& room : state.room_entries) {
+        int active = 0;
+        if (!read_i32(body, offset, active) ||
+            (active != 0 && active != 1) ||
+            !read_enum(body, offset, room.type) ||
+            !read_i32(body, offset, room.column) ||
+            !read_i32(body, offset, room.floor) ||
+            !read_i32(body, offset, room.stored) ||
+            !read_i32(body, offset, room.production_steps)) {
+            return false;
+        }
+        room.active = active != 0;
+    }
+    for (auto& resident : state.residents) {
+        int active = 0;
+        if (!read_i32(body, offset, active) ||
+            (active != 0 && active != 1) ||
+            !read_i32(body, offset, resident.current_column) ||
+            !read_i32(body, offset, resident.current_floor) ||
+            !read_i32(body, offset, resident.next_column) ||
+            !read_i32(body, offset, resident.next_floor) ||
+            !read_i32(body, offset, resident.destination_column) ||
+            !read_i32(body, offset, resident.destination_floor) ||
+            !read_i32(body, offset, resident.assigned_room) ||
+            !read_enum(body, offset, resident.state) ||
+            !read_i32(body, offset, resident.movement_ticks) ||
+            !read_i32(body, offset, resident.roaming_ticks) ||
+            !read_i32(body, offset, resident.roaming_sequence)) {
+            return false;
+        }
+        resident.active = active != 0;
+    }
+    return offset == body.size() && valid_playable_state(state);
+}
+
 }  // namespace
 
+PlayableShelterSession::PlayableShelterSession()
+    : PlayableShelterSession(PlayableShelterState{}) {}
+
 PlayableShelterSession::PlayableShelterSession(PlayableShelterState state)
-    : state_(valid_playable_state(state) ? state : PlayableShelterState{}) {}
+    : state_(normalized_state(state)) {
+    if (!valid_playable_state(state_)) {
+        state_ = normalized_state(PlayableShelterState{});
+    }
+}
 
 const PlayableShelterState& PlayableShelterSession::state() const noexcept {
     return state_;
 }
 
 bool PlayableShelterSession::select_previous_room() noexcept {
-    if (state_.selected_room <= 0) return false;
-    --state_.selected_room;
-    return true;
+    for (int room = state_.selected_room - 1; room >= 0; --room) {
+        if (state_.room_entries[static_cast<std::size_t>(room)].active) {
+            state_.selected_room = room;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool PlayableShelterSession::select_next_room() noexcept {
-    if (state_.selected_room + 1 >= state_.rooms) return false;
-    ++state_.selected_room;
-    return true;
+    for (int room = state_.selected_room + 1;
+         room < kPlayableRoomCapacity; ++room) {
+        if (state_.room_entries[static_cast<std::size_t>(room)].active) {
+            state_.selected_room = room;
+            return true;
+        }
+    }
+    return false;
 }
 
 BuildResult PlayableShelterSession::build_room() noexcept {
-    constexpr int kRoomCost = 100;
     if (state_.rooms >= kPlayableMaxRooms) return BuildResult::Full;
-    if (state_.credits < kRoomCost) {
+    constexpr int kLegacyRoomCost = 100;
+    if (state_.credits < kLegacyRoomCost) {
         return BuildResult::NotEnoughCredits;
     }
-    state_.credits -= kRoomCost;
-    ++state_.rooms;
-    state_.selected_room = state_.rooms - 1;
+    const int room_index = state_.rooms;
+    const auto position = legacy_room_position(room_index);
+    if (room_index_at(position[0], position[1]) >= 0) {
+        return BuildResult::InvalidPlacement;
+    }
+    auto& room =
+        state_.room_entries[static_cast<std::size_t>(room_index)];
+    room.active = true;
+    room.type = legacy_room_type(room_index);
+    room.column = position[0];
+    room.floor = position[1];
+    room.stored = 0;
+    room.production_steps = 0;
+    state_.credits -= kLegacyRoomCost;
+    state_.selected_room = room_index;
+    sync_legacy_view();
     return BuildResult::Built;
 }
 
 void PlayableShelterSession::assign_selected_room() noexcept {
-    state_.assigned_room = state_.selected_room;
+    (void)assign_resident_to_room(0u, state_.selected_room);
 }
 
 CollectResult PlayableShelterSession::collect_selected_room() noexcept {
-    const std::size_t room =
-        static_cast<std::size_t>(state_.selected_room);
-    const int amount = state_.stored[room];
+    auto& room = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)];
+    const int amount = room.stored;
     if (amount <= 0) return CollectResult::NothingStored;
-    state_.stored[room] = 0;
-    switch (state_.selected_room) {
-        case 0:
+    room.stored = 0;
+    switch (room.type) {
+        case PlayableRoomType::Power:
             state_.power = std::min(100, state_.power + amount);
             break;
-        case 1:
+        case PlayableRoomType::Food:
             state_.food = std::min(100, state_.food + amount);
             break;
-        case 2:
+        case PlayableRoomType::Water:
             state_.water = std::min(100, state_.water + amount);
             break;
-        default:
+        case PlayableRoomType::Workshop:
             state_.credits += amount * 2;
+            break;
+        case PlayableRoomType::Living:
+        case PlayableRoomType::Elevator:
             break;
     }
     state_.credits += amount * 3;
+    sync_legacy_view();
     return CollectResult::Collected;
 }
 
 void PlayableShelterSession::fixed_step() noexcept {
-    if (state_.assigned_room < 0 ||
-        state_.assigned_room >= state_.rooms) {
-        return;
+    for (auto& resident : state_.residents) {
+        step_resident(state_, resident);
     }
-    const std::size_t room =
-        static_cast<std::size_t>(state_.assigned_room);
-    ++state_.production_steps[room];
-    if (state_.production_steps[room] >=
-        kPlayableProductionCycleSteps) {
-        state_.production_steps[room] = 0;
-        state_.stored[room] = std::min(
-            kPlayableStorageCapacity, state_.stored[room] + 5);
+
+    for (int room_index = 0;
+         room_index < kPlayableRoomCapacity; ++room_index) {
+        auto& room =
+            state_.room_entries[static_cast<std::size_t>(room_index)];
+        if (!room.active || !room_produces(room.type)) continue;
+        bool working = false;
+        for (const auto& resident : state_.residents) {
+            if (resident.active &&
+                resident.state == PlayableResidentState::Working &&
+                resident.assigned_room == room_index &&
+                resident.current_column == room.column &&
+                resident.current_floor == room.floor) {
+                working = true;
+                break;
+            }
+        }
+        if (!working) continue;
+        ++room.production_steps;
+        if (room.production_steps >=
+            kPlayableProductionCycleSteps) {
+            room.production_steps = 0;
+            room.stored = std::min(
+                kPlayableStorageCapacity, room.stored + 5);
+        }
     }
+    sync_legacy_view();
+}
+
+bool PlayableShelterSession::select_build_type(
+    PlayableRoomType type) noexcept {
+    if (!valid_room_type(type)) return false;
+    state_.selected_build_type = type;
+    return true;
+}
+
+PlayableRoomType
+PlayableShelterSession::selected_build_type() const noexcept {
+    return state_.selected_build_type;
+}
+
+bool PlayableShelterSession::set_build_cursor(
+    int column, int floor) noexcept {
+    if (!in_grid(column, floor)) return false;
+    state_.build_cursor_column = column;
+    state_.build_cursor_floor = floor;
+    return true;
+}
+
+bool PlayableShelterSession::move_build_cursor(
+    int column_delta, int floor_delta) noexcept {
+    return set_build_cursor(
+        state_.build_cursor_column + column_delta,
+        state_.build_cursor_floor + floor_delta);
+}
+
+int PlayableShelterSession::build_cursor_column() const noexcept {
+    return state_.build_cursor_column;
+}
+
+int PlayableShelterSession::build_cursor_floor() const noexcept {
+    return state_.build_cursor_floor;
+}
+
+PlayableBuildPreview
+PlayableShelterSession::preview_build() const noexcept {
+    PlayableBuildPreview preview;
+    preview.cost = room_cost(state_.selected_build_type);
+    if (!in_grid(
+            state_.build_cursor_column,
+            state_.build_cursor_floor)) {
+        preview.status = BuildPreviewStatus::OutOfBounds;
+    } else if (room_index_at(
+                   state_.build_cursor_column,
+                   state_.build_cursor_floor) >= 0) {
+        preview.status = BuildPreviewStatus::Occupied;
+    } else if (state_.rooms >= kPlayableRoomCapacity) {
+        preview.status = BuildPreviewStatus::Full;
+    } else if (state_.credits < preview.cost) {
+        preview.status = BuildPreviewStatus::NotEnoughCredits;
+    } else {
+        preview.status = BuildPreviewStatus::Valid;
+    }
+    return preview;
+}
+
+BuildResult PlayableShelterSession::confirm_build() noexcept {
+    const PlayableBuildPreview preview = preview_build();
+    switch (preview.status) {
+        case BuildPreviewStatus::NotEnoughCredits:
+            return BuildResult::NotEnoughCredits;
+        case BuildPreviewStatus::Full:
+            return BuildResult::Full;
+        case BuildPreviewStatus::OutOfBounds:
+        case BuildPreviewStatus::Occupied:
+            return BuildResult::InvalidPlacement;
+        case BuildPreviewStatus::Valid:
+            break;
+    }
+
+    int slot = -1;
+    for (int room = 0; room < kPlayableRoomCapacity; ++room) {
+        if (!state_.room_entries[
+                 static_cast<std::size_t>(room)].active) {
+            slot = room;
+            break;
+        }
+    }
+    if (slot < 0) return BuildResult::Full;
+    auto& room =
+        state_.room_entries[static_cast<std::size_t>(slot)];
+    room.active = true;
+    room.type = state_.selected_build_type;
+    room.column = state_.build_cursor_column;
+    room.floor = state_.build_cursor_floor;
+    room.stored = 0;
+    room.production_steps = 0;
+    state_.credits -= preview.cost;
+    state_.selected_room = slot;
+    sync_legacy_view();
+    return BuildResult::Built;
+}
+
+int PlayableShelterSession::room_index_at(
+    int column, int floor) const noexcept {
+    return room_index_at_state(state_, column, floor);
+}
+
+bool PlayableShelterSession::assign_resident_to_room(
+    std::size_t resident_index, int room_index) noexcept {
+    if (resident_index >= state_.residents.size() ||
+        room_index < 0 || room_index >= kPlayableRoomCapacity) {
+        return false;
+    }
+    auto& resident = state_.residents[resident_index];
+    const auto& room =
+        state_.room_entries[static_cast<std::size_t>(room_index)];
+    if (!resident.active || !room.active ||
+        room.type == PlayableRoomType::Elevator ||
+        !route_exists(state_, resident, room)) {
+        return false;
+    }
+    resident.assigned_room = room_index;
+    resident.destination_column = room.column;
+    resident.destination_floor = room.floor;
+    resident.next_column = resident.current_column;
+    resident.next_floor = resident.current_floor;
+    resident.movement_ticks = 0;
+    resident.roaming_ticks = 0;
+    resident.state =
+        resident.current_column == room.column &&
+                resident.current_floor == room.floor
+            ? PlayableResidentState::Working
+            : PlayableResidentState::Transit;
+    sync_legacy_view();
+    return true;
+}
+
+PlayableResidentPosition PlayableShelterSession::resident_position(
+    std::size_t resident_index) const noexcept {
+    PlayableResidentPosition position;
+    if (resident_index >= state_.residents.size()) return position;
+    const auto& resident = state_.residents[resident_index];
+    position.active = resident.active;
+    if (!resident.active) return position;
+    const float progress =
+        static_cast<float>(resident.movement_ticks) /
+        static_cast<float>(kPlayableMovementStepTicks);
+    position.column =
+        static_cast<float>(resident.current_column) +
+        static_cast<float>(
+            resident.next_column - resident.current_column) *
+            progress;
+    position.floor =
+        static_cast<float>(resident.current_floor) +
+        static_cast<float>(
+            resident.next_floor - resident.current_floor) *
+            progress;
+    return position;
 }
 
 int PlayableShelterSession::selected_stored() const noexcept {
-    return state_.stored[static_cast<std::size_t>(
-        state_.selected_room)];
+    return state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)].stored;
 }
 
 int PlayableShelterSession::selected_progress() const noexcept {
-    return state_.production_steps[static_cast<std::size_t>(
-        state_.selected_room)];
+    return state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)].production_steps;
 }
 
 bool PlayableShelterSession::selected_has_worker() const noexcept {
-    return state_.assigned_room == state_.selected_room;
+    for (const auto& resident : state_.residents) {
+        if (resident.active &&
+            resident.state == PlayableResidentState::Working &&
+            resident.assigned_room == state_.selected_room) {
+            return true;
+        }
+    }
+    return false;
 }
 
 PrimaryAction PlayableShelterSession::primary_action() const noexcept {
@@ -210,36 +910,145 @@ const char* PlayableShelterSession::next_step() const noexcept {
     return "Wybierz akcje.";
 }
 
+void PlayableShelterSession::sync_legacy_view() noexcept {
+    sync_legacy_fields(state_);
+}
+
 bool valid_playable_state(const PlayableShelterState& state) noexcept {
     if (state.credits < 0 ||
         state.power < 0 || state.power > 100 ||
         state.food < 0 || state.food > 100 ||
         state.water < 0 || state.water > 100 ||
-        state.rooms < 1 || state.rooms > kPlayableMaxRooms ||
+        state.rooms < 1 || state.rooms > kPlayableRoomCapacity ||
         state.selected_room < 0 ||
-        state.selected_room >= state.rooms ||
+        state.selected_room >= kPlayableRoomCapacity ||
         state.assigned_room < -1 ||
-        state.assigned_room >= state.rooms) {
+        state.assigned_room >= kPlayableRoomCapacity ||
+        !valid_room_type(state.selected_build_type) ||
+        !in_grid(
+            state.build_cursor_column, state.build_cursor_floor)) {
         return false;
     }
-    for (std::size_t room = 0; room < state.stored.size(); ++room) {
-        if (state.stored[room] < 0 ||
-            state.stored[room] > kPlayableStorageCapacity ||
-            state.production_steps[room] < 0 ||
-            state.production_steps[room] >=
-                kPlayableProductionCycleSteps) {
+
+    int active_rooms = 0;
+    std::array<bool, kPlayableRoomCapacity> occupied{};
+    for (int room_index = 0;
+         room_index < kPlayableRoomCapacity; ++room_index) {
+        const auto& room =
+            state.room_entries[static_cast<std::size_t>(room_index)];
+        if (!room.active) continue;
+        ++active_rooms;
+        if (!valid_room_type(room.type) ||
+            !in_grid(room.column, room.floor) ||
+            room.stored < 0 ||
+            room.stored > kPlayableStorageCapacity ||
+            room.production_steps < 0 ||
+            room.production_steps >= kPlayableProductionCycleSteps) {
+            return false;
+        }
+        const int cell = grid_index(room.column, room.floor);
+        if (occupied[static_cast<std::size_t>(cell)]) return false;
+        occupied[static_cast<std::size_t>(cell)] = true;
+    }
+    if (active_rooms != state.rooms ||
+        !state.room_entries[
+             static_cast<std::size_t>(state.selected_room)].active) {
+        return false;
+    }
+
+    for (int room = 0; room < kPlayableMaxRooms; ++room) {
+        const auto& entry =
+            state.room_entries[static_cast<std::size_t>(room)];
+        const int expected_stored = entry.active ? entry.stored : 0;
+        const int expected_progress =
+            entry.active ? entry.production_steps : 0;
+        if (state.stored[static_cast<std::size_t>(room)] !=
+                expected_stored ||
+            state.production_steps[static_cast<std::size_t>(room)] !=
+                expected_progress) {
             return false;
         }
     }
-    return true;
+
+    int active_residents = 0;
+    for (const auto& resident : state.residents) {
+        if (!resident.active) continue;
+        ++active_residents;
+        if (!valid_resident_state(resident.state) ||
+            !in_grid(
+                resident.current_column, resident.current_floor) ||
+            !in_grid(
+                resident.next_column, resident.next_floor) ||
+            !in_grid(
+                resident.destination_column,
+                resident.destination_floor) ||
+            !traversable_cell(
+                state,
+                resident.current_column,
+                resident.current_floor) ||
+            !traversable_cell(
+                state,
+                resident.next_column,
+                resident.next_floor) ||
+            !traversable_cell(
+                state,
+                resident.destination_column,
+                resident.destination_floor) ||
+            resident.movement_ticks < 0 ||
+            resident.movement_ticks >= kPlayableMovementStepTicks ||
+            resident.roaming_ticks < 0 ||
+            resident.roaming_ticks >= kRoamingPauseTicks ||
+            resident.roaming_sequence < 0) {
+            return false;
+        }
+        const int segment_column_delta =
+            std::abs(resident.next_column - resident.current_column);
+        const int segment_floor_delta =
+            std::abs(resident.next_floor - resident.current_floor);
+        if (segment_column_delta + segment_floor_delta > 1 ||
+            (segment_floor_delta == 1 &&
+             !vertical_edge_allowed(
+                 state,
+                 resident.current_column,
+                 resident.current_floor,
+                 resident.next_column,
+                 resident.next_floor)) ||
+            (segment_column_delta + segment_floor_delta == 0 &&
+             resident.movement_ticks != 0)) {
+            return false;
+        }
+        if (resident.state == PlayableResidentState::Roaming) {
+            if (resident.assigned_room != -1) return false;
+            continue;
+        }
+        if (resident.assigned_room < 0 ||
+            resident.assigned_room >= kPlayableRoomCapacity) {
+            return false;
+        }
+        const auto& assigned = state.room_entries[
+            static_cast<std::size_t>(resident.assigned_room)];
+        if (!assigned.active ||
+            resident.destination_column != assigned.column ||
+            resident.destination_floor != assigned.floor) {
+            return false;
+        }
+        if (resident.state == PlayableResidentState::Working &&
+            (resident.current_column != resident.destination_column ||
+             resident.current_floor != resident.destination_floor)) {
+            return false;
+        }
+    }
+    if (active_residents < kPlayableResidentCount) return false;
+    return state.assigned_room == state.residents[0].assigned_room;
 }
 
 std::vector<std::uint8_t> encode_playable_state(
-    const PlayableShelterState& state) {
+    const PlayableShelterState& source_state) {
+    const PlayableShelterState state = normalized_state(source_state);
     if (!valid_playable_state(state)) return {};
 
     std::vector<std::uint8_t> payload;
-    payload.reserve(kPlayableSavePayloadSize);
+    payload.reserve(kPlayableSavePayloadSizeV2);
     append_i32(payload, state.credits);
     append_i32(payload, state.power);
     append_i32(payload, state.food);
@@ -247,15 +1056,41 @@ std::vector<std::uint8_t> encode_playable_state(
     append_i32(payload, state.rooms);
     append_i32(payload, state.selected_room);
     append_i32(payload, state.assigned_room);
+    append_i32(payload, static_cast<int>(state.selected_build_type));
+    append_i32(payload, state.build_cursor_column);
+    append_i32(payload, state.build_cursor_floor);
     for (const int value : state.stored) append_i32(payload, value);
     for (const int value : state.production_steps) {
         append_i32(payload, value);
     }
+    for (const auto& room : state.room_entries) {
+        append_i32(payload, room.active ? 1 : 0);
+        append_i32(payload, static_cast<int>(room.type));
+        append_i32(payload, room.column);
+        append_i32(payload, room.floor);
+        append_i32(payload, room.stored);
+        append_i32(payload, room.production_steps);
+    }
+    for (const auto& resident : state.residents) {
+        append_i32(payload, resident.active ? 1 : 0);
+        append_i32(payload, resident.current_column);
+        append_i32(payload, resident.current_floor);
+        append_i32(payload, resident.next_column);
+        append_i32(payload, resident.next_floor);
+        append_i32(payload, resident.destination_column);
+        append_i32(payload, resident.destination_floor);
+        append_i32(payload, resident.assigned_room);
+        append_i32(payload, static_cast<int>(resident.state));
+        append_i32(payload, resident.movement_ticks);
+        append_i32(payload, resident.roaming_ticks);
+        append_i32(payload, resident.roaming_sequence);
+    }
+    if (payload.size() != kPlayableSavePayloadSizeV2) return {};
 
     std::vector<std::uint8_t> output;
     output.reserve(kPlayableSaveHeaderSize + payload.size());
     append_u32(output, kPlayableSaveMagic);
-    append_u16(output, kPlayableSaveVersion);
+    append_u16(output, kPlayableSaveVersionV2);
     append_u16(output, 0u);
     append_u32(output, static_cast<std::uint32_t>(payload.size()));
     append_u32(output, persistence::crc32(
@@ -283,9 +1118,13 @@ PlayableLoadResult decode_playable_state(
         !read_u32(bytes, offset, payload_size) ||
         !read_u32(bytes, offset, checksum) ||
         magic != kPlayableSaveMagic ||
-        version != kPlayableSaveVersion ||
+        (version != kPlayableSaveVersionV1 &&
+         version != kPlayableSaveVersionV2) ||
         reserved != 0u ||
-        payload_size != kPlayableSavePayloadSize ||
+        (version == kPlayableSaveVersionV1 &&
+         payload_size != kPlayableSavePayloadSizeV1) ||
+        (version == kPlayableSaveVersionV2 &&
+         payload_size != kPlayableSavePayloadSizeV2) ||
         bytes.size() != kPlayableSaveHeaderSize + payload_size) {
         result.status = PlayableSaveStatus::Corrupt;
         return result;
@@ -299,36 +1138,19 @@ PlayableLoadResult decode_playable_state(
 
     std::vector<std::uint8_t> body(
         payload, payload + payload_size);
-    std::size_t body_offset = 0u;
     PlayableShelterState state;
-    if (!read_i32(body, body_offset, state.credits) ||
-        !read_i32(body, body_offset, state.power) ||
-        !read_i32(body, body_offset, state.food) ||
-        !read_i32(body, body_offset, state.water) ||
-        !read_i32(body, body_offset, state.rooms) ||
-        !read_i32(body, body_offset, state.selected_room) ||
-        !read_i32(body, body_offset, state.assigned_room)) {
-        result.status = PlayableSaveStatus::Corrupt;
-        return result;
-    }
-    for (int& value : state.stored) {
-        if (!read_i32(body, body_offset, value)) {
-            result.status = PlayableSaveStatus::Corrupt;
-            return result;
-        }
-    }
-    for (int& value : state.production_steps) {
-        if (!read_i32(body, body_offset, value)) {
-            result.status = PlayableSaveStatus::Corrupt;
-            return result;
-        }
-    }
-    if (body_offset != body.size() || !valid_playable_state(state)) {
+    const bool parsed =
+        version == kPlayableSaveVersionV1
+            ? read_v1_payload(body, state)
+            : read_v2_payload(body, state);
+    if (!parsed) {
         result.status = PlayableSaveStatus::Corrupt;
         return result;
     }
     result.status = PlayableSaveStatus::Ok;
     result.state = state;
+    result.migrated_from_v1 =
+        version == kPlayableSaveVersionV1;
     return result;
 }
 

@@ -12,8 +12,8 @@ namespace {
 
 constexpr float kByteToUnit = 1.0f / 255.0f;
 
-u32 accent_for_room(int room, u8 alpha) noexcept {
-    switch ((room % 6 + 6) % 6) {
+u32 accent_for_profile(int visual_profile, u8 alpha) noexcept {
+    switch ((visual_profile % 6 + 6) % 6) {
         case 0: return 244u | (177u << 8) | (61u << 16) | (static_cast<u32>(alpha) << 24);
         case 1: return 102u | (210u << 8) | (116u << 16) | (static_cast<u32>(alpha) << 24);
         case 2: return 78u | (179u << 8) | (224u << 16) | (static_cast<u32>(alpha) << 24);
@@ -122,33 +122,106 @@ bool GlowPassRenderer::append_quad(float x,
 void GlowPassRenderer::build(const ShelterCamera& camera,
                              const ShelterSceneState3D& state) noexcept {
     vertex_count_ = 0;
-    const int active_rooms = std::clamp(state.rooms, 0, 6);
-    for (int room = 0; room < active_rooms; ++room) {
-        const float x = layout::kRoomX[room];
-        const float y = layout::kRoomY[room];
-        if (!camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) continue;
+    constexpr std::size_t kSelectionReserve = 24;
+    constexpr std::size_t kPreviewReserve = 24;
+    const std::size_t room_count =
+        std::min(state.room_count, state.rooms.size());
 
-        append_quad(x + 15.0f, y + 6.0f, 0.5f, 102.0f, 3.5f,
-                    accent_for_room(room, 104));
-        append_quad(x + 26.0f, y + 44.0f, 0.4f, 80.0f, 2.5f,
-                    accent_for_room(room, 48));
+    for (std::size_t index = 0; index < room_count; ++index) {
+        const RoomRenderEntry& room = state.rooms[index];
+        if (!layout::valid_grid_position(room.grid_column,
+                                         room.grid_floor)) {
+            continue;
+        }
+        const float cell_x = layout::room_x(room.grid_column);
+        const float y = layout::room_y(room.grid_floor);
+        if (!camera.visible(cell_x,
+                            y,
+                            layout::kRoomWidth,
+                            layout::kRoomHeight)) {
+            continue;
+        }
+        if (vertex_count_ + 6 + kSelectionReserve + kPreviewReserve >
+            vertices_.size()) {
+            break;
+        }
+        const float x = room.elevator
+                            ? layout::elevator_x(room.grid_column)
+                            : cell_x;
+        const float width =
+            room.elevator ? layout::kElevatorWidth : layout::kRoomWidth;
+        append_quad(x + 4.0f,
+                    y + 6.0f,
+                    0.5f,
+                    width - 8.0f,
+                    3.5f,
+                    room.elevator
+                        ? (145u | (190u << 8) | (193u << 16) |
+                           (static_cast<u32>(88) << 24))
+                        : accent_for_profile(room.visual_profile, 104));
     }
 
-    if (state.selected_room >= 0 && state.selected_room < active_rooms) {
-        const int room = state.selected_room;
-        const float x = layout::kRoomX[room];
-        const float y = layout::kRoomY[room];
-        if (camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) {
+    for (std::size_t index = 0; index < room_count; ++index) {
+        const RoomRenderEntry& room = state.rooms[index];
+        if (!room.selected ||
+            !layout::valid_grid_position(room.grid_column,
+                                         room.grid_floor)) {
+            continue;
+        }
+        const float cell_x = layout::room_x(room.grid_column);
+        const float y = layout::room_y(room.grid_floor);
+        const float x = room.elevator
+                            ? layout::elevator_x(room.grid_column)
+                            : cell_x;
+        const float width =
+            room.elevator ? layout::kElevatorWidth : layout::kRoomWidth;
+        if (camera.visible(cell_x,
+                           y,
+                           layout::kRoomWidth,
+                           layout::kRoomHeight)) {
             const u32 selection = 86u | (199u << 8) | (240u << 16) |
                                   (static_cast<u32>(126) << 24);
-            append_quad(x - 2.0f, y - 2.0f, 1.0f, layout::kRoomWidth + 4.0f, 3.0f,
+            append_quad(x - 2.0f, y - 2.0f, 1.0f, width + 4.0f, 3.0f,
                         selection);
             append_quad(x - 2.0f, y + layout::kRoomHeight - 1.0f, 1.0f,
-                        layout::kRoomWidth + 4.0f, 3.0f, selection);
+                        width + 4.0f, 3.0f, selection);
             append_quad(x - 2.0f, y + 1.0f, 1.0f, 3.0f,
                         layout::kRoomHeight - 2.0f, selection);
-            append_quad(x + layout::kRoomWidth - 1.0f, y + 1.0f, 1.0f, 3.0f,
+            append_quad(x + width - 1.0f, y + 1.0f, 1.0f, 3.0f,
                         layout::kRoomHeight - 2.0f, selection);
+        }
+        break;
+    }
+
+    const BuildPreviewRenderEntry& preview = state.build_preview;
+    if (preview.active &&
+        layout::valid_grid_position(preview.grid_column,
+                                    preview.grid_floor)) {
+        const float cell_x = layout::room_x(preview.grid_column);
+        const float y = layout::room_y(preview.grid_floor);
+        if (camera.visible(cell_x,
+                           y,
+                           layout::kRoomWidth,
+                           layout::kRoomHeight)) {
+            const float x = preview.elevator
+                                ? layout::elevator_x(preview.grid_column)
+                                : cell_x;
+            const float width = preview.elevator
+                                    ? layout::kElevatorWidth
+                                    : layout::kRoomWidth;
+            const u32 color = preview.valid
+                                  ? (112u | (255u << 8) | (177u << 16) |
+                                     (static_cast<u32>(148) << 24))
+                                  : (255u | (92u << 8) | (78u << 16) |
+                                     (static_cast<u32>(168) << 24));
+            append_quad(x - 2.0f, y - 2.0f, 1.5f,
+                        width + 4.0f, 3.0f, color);
+            append_quad(x - 2.0f, y + layout::kRoomHeight - 1.0f, 1.5f,
+                        width + 4.0f, 3.0f, color);
+            append_quad(x - 2.0f, y + 1.0f, 1.5f, 3.0f,
+                        layout::kRoomHeight - 2.0f, color);
+            append_quad(x + width - 1.0f, y + 1.0f, 1.5f, 3.0f,
+                        layout::kRoomHeight - 2.0f, color);
         }
     }
 }

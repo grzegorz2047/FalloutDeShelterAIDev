@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -9,6 +10,7 @@
 
 #include "render/Scene3D.hpp"
 #include "render/ShelterCamera.hpp"
+#include "render/ShelterSceneLayout.hpp"
 
 namespace deep_shelter::render {
 
@@ -44,13 +46,63 @@ namespace deep_shelter::render {
     return target;
 }
 
-struct ShelterSceneState3D {
-    int rooms = 1;
-    int selected_room = 0;
+struct RoomRenderEntry {
+    int grid_column = -1;
+    int grid_floor = -1;
+    // Profiles 0..5 map to power, food/hydroponics, water, workshop,
+    // storage and living silhouettes. Elevator entries ignore this field.
+    int visual_profile = 0;
     int stored = 0;
-    int resident_room = -1;
-    std::uint32_t animation_tick = 0;
+    bool selected = false;
+    bool elevator = false;
 };
+
+struct ResidentRenderEntry {
+    // Simulation/pathfinding supplies continuous world-space coordinates.
+    // They are deliberately independent from room slots so a resident can
+    // visibly interpolate through corridors and the elevator.
+    float world_x = 0.0f;
+    float world_y = 0.0f;
+    int archetype = 4;
+    bool moving = false;
+    bool working = false;
+    std::uint32_t animation_phase = 0;
+};
+
+struct BuildPreviewRenderEntry {
+    int grid_column = -1;
+    int grid_floor = -1;
+    int visual_profile = 0;
+    bool elevator = false;
+    bool valid = false;
+    bool active = false;
+};
+
+struct ShelterSceneState3D {
+    std::array<RoomRenderEntry, layout::kMaximumRoomEntries> rooms{};
+    std::size_t room_count = 0;
+    std::array<ResidentRenderEntry, layout::kMaximumResidentEntries>
+        residents{};
+    std::size_t resident_count = 0;
+    BuildPreviewRenderEntry build_preview{};
+    std::uint32_t animation_tick = 0;
+
+    ShelterSceneState3D() noexcept = default;
+
+    // Keeps the existing vertical-slice caller source-compatible while the
+    // gameplay layer migrates to explicit render entries.
+    ShelterSceneState3D(int legacy_room_count,
+                        int legacy_selected_room,
+                        int legacy_stored,
+                        int legacy_resident_room,
+                        std::uint32_t tick) noexcept;
+};
+
+static_assert(layout::kMaximumRoomEntries >= 48,
+              "The render state must cover the complete 8x6 shelter grid");
+static_assert(layout::kMaximumResidentEntries >=
+                  layout::kMinimumResidentEntries,
+              "The scene must support at least three visible residents");
 
 class Scene3DRenderer {
 public:

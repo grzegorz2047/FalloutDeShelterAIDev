@@ -5,6 +5,7 @@
 
 #include "assets/GeneratedMaterialAtlas.hpp"
 #include "assets/RoomAssetAtlas.hpp"
+#include "render/RoomVisualProfile.hpp"
 #include "render/ShelterSceneLayout.hpp"
 #include "render/ShelterView3D.hpp"
 #include "room_assets_bin.h"
@@ -18,11 +19,18 @@ constexpr u32 rgba(u8 r, u8 g, u8 b, u8 a = 255) noexcept {
            (static_cast<u32>(b) << 16) | (static_cast<u32>(a) << 24);
 }
 
-void append_selection(SceneMesh3D& mesh, float x, float y) noexcept {
+constexpr int normalized_visual_profile(int visual_profile) noexcept {
+    return (visual_profile % 6 + 6) % 6;
+}
+
+void append_selection(SceneMesh3D& mesh,
+                      float x,
+                      float y,
+                      float width) noexcept {
     constexpr u32 c = 0xFF56C7F0;
     constexpr float arm = 22.0f;
     constexpr float t = 3.0f;
-    const float r = x + layout::kRoomWidth;
+    const float r = x + width;
     const float b = y + layout::kRoomHeight;
     mesh.append_box({x - 2.0f, y - 2.0f, -1.0f, arm, t, 3.0f, c, assets::GeneratedMaterial::ControlPanel});
     mesh.append_box({x - 2.0f, y - 2.0f, -1.0f, t, arm, 3.0f, c, assets::GeneratedMaterial::ControlPanel});
@@ -34,32 +42,20 @@ void append_selection(SceneMesh3D& mesh, float x, float y) noexcept {
     mesh.append_box({r - 1.0f, b - arm + 2.0f, -1.0f, t, arm, 3.0f, c, assets::GeneratedMaterial::ControlPanel});
 }
 
-void append_cavity(SceneMesh3D& mesh, float x, float y, int room) noexcept {
-    const u32 variation =
-        ((room & 1) == 0) ? rgba(155, 143, 129) : rgba(134, 126, 116);
-    // An unbuilt slot is a deep excavation with no blueprint "prop". The long
-    // floor slab makes the opening read as a volume even before construction.
-    mesh.append_box({x + 3.0f, y + 4.0f, -58.0f, 126.0f, 55.0f, 5.0f,
-                     rgba(112, 105, 96), assets::GeneratedMaterial::Rock});
-    mesh.append_box({x + 9.0f, y + 10.0f, -52.0f, 114.0f, 40.0f, 4.0f,
-                     variation, assets::GeneratedMaterial::ExcavatedRock});
-    mesh.append_box({x + 3.0f, y + 51.0f, -52.0f, 126.0f, 9.0f, 54.0f,
-                     rgba(90, 84, 76), assets::GeneratedMaterial::ExcavatedRock});
-    mesh.append_box({x + 2.0f, y + 4.0f, -52.0f, 8.0f, 56.0f, 54.0f,
-                     rgba(99, 92, 84), assets::GeneratedMaterial::Rock});
-    mesh.append_box({x + 122.0f, y + 4.0f, -52.0f, 8.0f, 56.0f, 54.0f,
-                     rgba(99, 92, 84), assets::GeneratedMaterial::Rock});
-}
-
-void append_shell(SceneMesh3D& mesh, float x, float y, int room) noexcept {
+void append_shell(SceneMesh3D& mesh,
+                  float x,
+                  float y,
+                  int visual_profile) noexcept {
+    const int profile = normalized_visual_profile(visual_profile);
     const auto wall_material =
-        room == 2 ? assets::GeneratedMaterial::Water
-                  : (room == 1 ? assets::GeneratedMaterial::Hydroponic
-                               : assets::GeneratedMaterial::VaultPanel);
+        profile == 2 ? assets::GeneratedMaterial::Water
+                     : (profile == 1
+                            ? assets::GeneratedMaterial::Hydroponic
+                            : assets::GeneratedMaterial::VaultPanel);
     const u32 wall_tint =
-        room == 2 ? rgba(190, 224, 235)
-                  : (room == 1 ? rgba(204, 225, 193)
-                               : rgba(218, 211, 192));
+        profile == 2 ? rgba(190, 224, 235)
+                     : (profile == 1 ? rgba(204, 225, 193)
+                                     : rgba(218, 211, 192));
     // Open-front room prism: rear wall at z=-54, structural shell reaching
     // z=+3. The oblique camera exposes floor, ceiling and both side returns.
     mesh.append_box({x + 8.0f, y + 8.0f, -56.0f, 116.0f, 43.0f, 4.0f,
@@ -72,10 +68,60 @@ void append_shell(SceneMesh3D& mesh, float x, float y, int room) noexcept {
                      rgba(145, 151, 150), assets::GeneratedMaterial::Steel});
     mesh.append_box({x + 123.0f, y + 3.0f, -54.0f, 8.0f, 58.0f, 58.0f,
                      rgba(145, 151, 150), assets::GeneratedMaterial::Steel});
-    mesh.append_box({x + 9.0f, y + 8.0f, -50.0f, 4.0f, 42.0f, 3.0f,
-                     rgba(128, 138, 137), assets::GeneratedMaterial::Steel});
-    mesh.append_box({x + 119.0f, y + 8.0f, -50.0f, 4.0f, 42.0f, 3.0f,
-                     rgba(128, 138, 137), assets::GeneratedMaterial::Steel});
+}
+
+void append_elevator(SceneMesh3D& mesh, float x, float y) noexcept {
+    mesh.append_box({x, y + 2.0f, -56.0f,
+                     layout::kElevatorWidth, layout::kRoomHeight - 4.0f, 5.0f,
+                     rgba(37, 46, 48), assets::GeneratedMaterial::Steel});
+    mesh.append_box({x, y, -52.0f,
+                     5.0f, layout::kRoomHeight, 55.0f,
+                     rgba(61, 70, 70), assets::GeneratedMaterial::Steel});
+    mesh.append_box({x + layout::kElevatorWidth - 5.0f, y, -52.0f,
+                     5.0f, layout::kRoomHeight, 55.0f,
+                     rgba(61, 70, 70), assets::GeneratedMaterial::Steel});
+    mesh.append_box({x + 5.0f, y + 10.0f, -8.0f,
+                     layout::kElevatorWidth - 10.0f,
+                     layout::kRoomHeight - 18.0f, 8.0f,
+                     rgba(75, 89, 91), assets::GeneratedMaterial::VaultPanel});
+    mesh.append_box({x + 11.0f, y + 19.0f, -1.0f,
+                     layout::kElevatorWidth - 22.0f,
+                     layout::kRoomHeight - 36.0f, 3.0f,
+                     rgba(105, 129, 127),
+                     assets::GeneratedMaterial::ControlPanel});
+}
+
+void append_build_preview(SceneMesh3D& mesh,
+                          float x,
+                          float y,
+                          float width,
+                          bool valid) noexcept {
+    const u32 color =
+        valid ? rgba(112, 255, 177, 220) : rgba(255, 92, 78, 235);
+    constexpr float thickness = 3.0f;
+    constexpr float depth = 4.0f;
+    mesh.append_box({x - 2.0f, y - 2.0f, 1.5f,
+                     width + 4.0f, thickness, depth, color,
+                     assets::GeneratedMaterial::ControlPanel});
+    mesh.append_box({x - 2.0f, y + layout::kRoomHeight - 1.0f, 1.5f,
+                     width + 4.0f, thickness, depth, color,
+                     assets::GeneratedMaterial::ControlPanel});
+    mesh.append_box({x - 2.0f, y + 1.0f, 1.5f,
+                     thickness, layout::kRoomHeight - 2.0f, depth, color,
+                     assets::GeneratedMaterial::ControlPanel});
+    mesh.append_box({x + width - 1.0f, y + 1.0f, 1.5f,
+                     thickness, layout::kRoomHeight - 2.0f, depth, color,
+                     assets::GeneratedMaterial::ControlPanel});
+    if (!valid) {
+        // A central cross differentiates an invalid target without relying on
+        // red/green perception alone.
+        mesh.append_box({x + width * 0.5f - 2.0f, y + 11.0f, 2.0f,
+                         4.0f, layout::kRoomHeight - 22.0f, depth, color,
+                         assets::GeneratedMaterial::ControlPanel});
+        mesh.append_box({x + 10.0f, y + layout::kRoomHeight * 0.5f - 2.0f,
+                         2.0f, width - 20.0f, 4.0f, depth, color,
+                         assets::GeneratedMaterial::ControlPanel});
+    }
 }
 
 void append_prop(SceneMesh3D& mesh,
@@ -160,8 +206,43 @@ void append_living(SceneMesh3D& mesh, float x, float y) noexcept {
                 assets::RoomProp::WorkTable);
 }
 
-void append_props(SceneMesh3D& mesh, float x, float y, int room) noexcept {
-    switch ((room % 6 + 6) % 6) {
+void append_dominant_prop(SceneMesh3D& mesh,
+                          float x,
+                          float y,
+                          int visual_profile) noexcept {
+    switch (normalized_visual_profile(visual_profile)) {
+        case 0:
+            append_prop(mesh, x + 42.0f, y + 14.0f, -28.0f, 48.0f, 36.0f,
+                        assets::RoomProp::PowerGenerator);
+            break;
+        case 1:
+            append_prop(mesh, x + 11.0f, y + 29.0f, -7.0f, 110.0f, 23.0f,
+                        assets::RoomProp::HydroponicPlanter);
+            break;
+        case 2:
+            append_prop(mesh, x + 39.0f, y + 13.0f, -25.0f, 62.0f, 38.0f,
+                        assets::RoomProp::WaterMachinery);
+            break;
+        case 3:
+            append_prop(mesh, x + 9.0f, y + 28.0f, -6.0f, 66.0f, 24.0f,
+                        assets::RoomProp::WorkTable);
+            break;
+        case 4:
+            append_prop(mesh, x + 8.0f, y + 14.0f, -23.0f, 52.0f, 36.0f,
+                        assets::RoomProp::StorageShelf);
+            break;
+        default:
+            append_prop(mesh, x + 8.0f, y + 13.0f, -22.0f, 61.0f, 38.0f,
+                        assets::RoomProp::BunkBeds);
+            break;
+    }
+}
+
+void append_props(SceneMesh3D& mesh,
+                  float x,
+                  float y,
+                  int visual_profile) noexcept {
+    switch (normalized_visual_profile(visual_profile)) {
         case 0: append_power(mesh, x, y); break;
         case 1: append_hydro(mesh, x, y); break;
         case 2: append_water(mesh, x, y); break;
@@ -172,6 +253,64 @@ void append_props(SceneMesh3D& mesh, float x, float y, int room) noexcept {
 }
 
 }  // namespace
+
+ShelterSceneState3D::ShelterSceneState3D(
+    int legacy_room_count,
+    int legacy_selected_room,
+    int legacy_stored,
+    int legacy_resident_room,
+    std::uint32_t tick) noexcept
+    : animation_tick(tick) {
+    const int active_rooms = std::clamp(legacy_room_count, 0, 6);
+    for (int room = 0; room < active_rooms; ++room) {
+        RoomRenderEntry& entry = rooms[room_count++];
+        entry.grid_column = (room % 2 == 0) ? 0 : 2;
+        entry.grid_floor = room / 2;
+        entry.visual_profile = room;
+        entry.stored = room == legacy_selected_room
+                           ? std::max(0, legacy_stored)
+                           : 0;
+        entry.selected = room == legacy_selected_room;
+    }
+
+    // The old vertical slice assumed one central shaft spanning its three
+    // floors. Express it through regular grid entries so the renderer itself
+    // never invents an elevator that is absent from scene state.
+    for (int floor = 0; floor < 3; ++floor) {
+        RoomRenderEntry& elevator = rooms[room_count++];
+        elevator.grid_column = 1;
+        elevator.grid_floor = floor;
+        elevator.elevator = true;
+    }
+
+    resident_count = layout::kMinimumResidentEntries;
+    for (std::size_t index = 0; index < resident_count; ++index) {
+        ResidentRenderEntry& resident = residents[index];
+        resident.animation_phase = static_cast<std::uint32_t>(index * 17u);
+        resident.archetype = 4;
+        resident.world_x =
+            layout::room_x(index == 1u ? 2 : 0) + 18.0f +
+            static_cast<float>(index) * 19.0f;
+        resident.world_y =
+            layout::room_y(static_cast<int>(index)) + 17.0f;
+        resident.moving = true;
+    }
+
+    if (legacy_resident_room >= 0 &&
+        legacy_resident_room < active_rooms) {
+        const int column =
+            (legacy_resident_room % 2 == 0) ? 0 : 2;
+        const int floor = legacy_resident_room / 2;
+        ResidentRenderEntry& worker = residents[0];
+        worker.archetype = legacy_resident_room;
+        worker.world_x =
+            layout::room_x(column) +
+            room_visual_profile(legacy_resident_room).resident_clear_x;
+        worker.world_y = layout::room_y(floor) + 17.0f;
+        worker.moving = false;
+        worker.working = true;
+    }
+}
 
 Scene3DRenderer::~Scene3DRenderer() { shutdown(); }
 
@@ -248,79 +387,123 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                                   const ShelterSceneState3D& state,
                                   RenderStats& stats) noexcept {
     mesh_.clear();
+    stats = {};
+
     // The continuous rock mass must remain behind the deepest room rear wall
-    // (z=-56). Keeping it near the old -26 front plane hid supplied wall
-    // textures, ceiling lights and rear equipment despite correct local depth.
-    mesh_.append_box({4.0f, 10.0f, -90.0f, 392.0f, 220.0f, 8.0f,
+    // (z=-56). Empty grid cells are therefore simply undisturbed rock instead
+    // of renderer-created cavities or blueprints.
+    mesh_.append_box({layout::kBackdropX,
+                      layout::kBackdropY,
+                      -90.0f,
+                      layout::kBackdropWidth,
+                      layout::kBackdropHeight,
+                      8.0f,
                       rgba(12, 13, 14), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({0.0f, 5.0f, -82.0f, 32.0f, 225.0f, 18.0f,
-                      rgba(47, 39, 34), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({368.0f, 5.0f, -82.0f, 32.0f, 225.0f, 18.0f,
-                      rgba(47, 39, 34), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({18.0f, 8.0f, -82.0f, 364.0f, 17.0f, 18.0f,
-                      rgba(60, 46, 38), assets::GeneratedMaterial::ExcavatedRock});
-    mesh_.append_box({18.0f, 220.0f, -82.0f, 364.0f, 18.0f, 18.0f,
-                      rgba(60, 46, 38), assets::GeneratedMaterial::ExcavatedRock});
-    for (int floor = 0; floor < 3; ++floor) {
-        const float fy = layout::kRoomY[floor * 2] + layout::kRoomHeight;
-        mesh_.append_box({28.0f, fy - 1.0f, -10.0f, 157.0f, 6.0f, 13.0f,
-                          rgba(43, 51, 52), assets::GeneratedMaterial::Grating});
-        mesh_.append_box({215.0f, fy - 1.0f, -10.0f, 157.0f, 6.0f, 13.0f,
-                          rgba(43, 51, 52), assets::GeneratedMaterial::Grating});
-    }
-    mesh_.append_box({181.0f, 13.0f, -20.0f, 38.0f, 214.0f, 8.0f,
-                      rgba(31, 29, 27), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({185.0f, 18.0f, -13.0f, 30.0f, 204.0f, 16.0f,
-                      rgba(37, 46, 48), assets::GeneratedMaterial::Steel});
-    for (int floor = 0; floor < 3; ++floor) {
-        const float door_y = layout::kRoomY[floor * 2] + 9.0f;
-        mesh_.append_box({189.0f, door_y, -4.0f, 22.0f, 43.0f, 6.0f,
-                          rgba(67, 80, 82), assets::GeneratedMaterial::VaultPanel});
-        mesh_.append_box({195.0f, door_y + 8.0f, -1.0f, 10.0f, 25.0f, 3.0f,
-                          rgba(90, 108, 107), assets::GeneratedMaterial::ControlPanel});
-    }
-    const int active_rooms = std::clamp(state.rooms, 0, 6);
-    for (int room = 0; room < 6; ++room) {
-        const float x = layout::kRoomX[room];
-        const float y = layout::kRoomY[room];
+
+    const std::size_t room_count =
+        std::min(state.room_count, state.rooms.size());
+    std::size_t visible_room_count = 0;
+    for (std::size_t index = 0; index < room_count; ++index) {
+        const RoomRenderEntry& room = state.rooms[index];
+        if (!layout::valid_grid_position(room.grid_column,
+                                         room.grid_floor)) {
+            ++stats.culled_cells;
+            continue;
+        }
+        const float x = layout::room_x(room.grid_column);
+        const float y = layout::room_y(room.grid_floor);
         if (!camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) {
             ++stats.culled_cells;
             continue;
         }
         ++stats.visible_cells;
-        const bool active = room < active_rooms;
-        if (active) {
-            append_shell(mesh_, x, y, room);
+        ++visible_room_count;
+        if (room.elevator) {
+            append_elevator(mesh_, layout::elevator_x(room.grid_column), y);
         } else {
-            append_cavity(mesh_, x, y, room);
+            append_shell(mesh_, x, y, room.visual_profile);
         }
     }
     structure_vertex_end_ = mesh_.vertex_count();
 
-    for (int room = 0; room < active_rooms; ++room) {
-        const float x = layout::kRoomX[room];
-        const float y = layout::kRoomY[room];
+    const bool overview_lod =
+        visible_room_count > layout::kFullDetailVisibleRoomLimit;
+    for (std::size_t index = 0; index < room_count; ++index) {
+        const RoomRenderEntry& room = state.rooms[index];
+        if (room.elevator ||
+            !layout::valid_grid_position(room.grid_column,
+                                         room.grid_floor)) {
+            continue;
+        }
+        const float x = layout::room_x(room.grid_column);
+        const float y = layout::room_y(room.grid_floor);
         if (!camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) {
             continue;
         }
-        append_props(mesh_, x, y, room);
+        if (overview_lod) {
+            append_dominant_prop(mesh_, x, y, room.visual_profile);
+        } else {
+            append_props(mesh_, x, y, room.visual_profile);
+        }
     }
     prop_vertex_end_ = mesh_.vertex_count();
 
-    if (state.selected_room >= 0 && state.selected_room < active_rooms) {
-        const int room = state.selected_room;
-        const float x = layout::kRoomX[room];
-        const float y = layout::kRoomY[room];
-        if (camera.visible(x, y, layout::kRoomWidth, layout::kRoomHeight)) {
-            if (state.stored > 0) {
+    bool selection_drawn = false;
+    for (std::size_t index = 0;
+         index < room_count && !selection_drawn;
+         ++index) {
+        const RoomRenderEntry& room = state.rooms[index];
+        if (!room.selected ||
+            !layout::valid_grid_position(room.grid_column,
+                                         room.grid_floor)) {
+            continue;
+        }
+        const float cell_x = layout::room_x(room.grid_column);
+        const float x = room.elevator
+                            ? layout::elevator_x(room.grid_column)
+                            : cell_x;
+        const float y = layout::room_y(room.grid_floor);
+        const float width =
+            room.elevator ? layout::kElevatorWidth : layout::kRoomWidth;
+        if (camera.visible(cell_x,
+                           y,
+                           layout::kRoomWidth,
+                           layout::kRoomHeight)) {
+            if (!room.elevator && room.stored > 0) {
                 const float fill = std::clamp(
-                    static_cast<float>(state.stored) / 30.0f, 0.0f, 1.0f);
+                    static_cast<float>(room.stored) / 30.0f, 0.0f, 1.0f);
                 mesh_.append_box(
-                    {x + 10.0f, y + 9.0f, -2.0f, 112.0f * fill, 3.0f, 4.0f,
+                    {x + 10.0f,
+                     y + 9.0f,
+                     -2.0f,
+                     (width - 20.0f) * fill,
+                     3.0f,
+                     4.0f,
                      rgba(112, 255, 177),
                      assets::GeneratedMaterial::ControlPanel});
             }
-            append_selection(mesh_, x, y);
+            append_selection(mesh_, x, y, width);
+            selection_drawn = true;
+        }
+    }
+
+    const BuildPreviewRenderEntry& preview = state.build_preview;
+    if (preview.active &&
+        layout::valid_grid_position(preview.grid_column,
+                                    preview.grid_floor)) {
+        const float cell_x = layout::room_x(preview.grid_column);
+        const float y = layout::room_y(preview.grid_floor);
+        if (camera.visible(cell_x,
+                           y,
+                           layout::kRoomWidth,
+                           layout::kRoomHeight)) {
+            const float x = preview.elevator
+                                ? layout::elevator_x(preview.grid_column)
+                                : cell_x;
+            const float width = preview.elevator
+                                    ? layout::kElevatorWidth
+                                    : layout::kRoomWidth;
+            append_build_preview(mesh_, x, y, width, preview.valid);
         }
     }
 

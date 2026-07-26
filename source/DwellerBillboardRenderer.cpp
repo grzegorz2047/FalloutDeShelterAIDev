@@ -5,8 +5,6 @@
 
 #include "assets/GeneratedDwellerAtlas.hpp"
 #include "dweller_v_shbin.h"
-#include "render/RoomVisualProfiles.hpp"
-#include "render/ShelterSceneLayout.hpp"
 #include "render/ShelterView3D.hpp"
 
 namespace deep_shelter::render {
@@ -106,21 +104,23 @@ bool DwellerBillboardRenderer::append_dweller(
     float x,
     float y,
     float z,
-    int room_index,
+    int archetype,
+    bool moving,
     bool working,
     std::uint32_t simulation_tick,
     std::uint32_t phase) noexcept {
     if (vertex_count_ + kVerticesPerDweller > vertices_.size()) return false;
 
-    const auto animation = working ? assets::DwellerAnimation::Work
-                                   : assets::DwellerAnimation::Idle;
-    const auto archetype = working
-                               ? assets::dweller_archetype_for_room(room_index)
-                               : assets::DwellerArchetype::Civilian;
+    const auto animation =
+        moving ? assets::DwellerAnimation::Walk
+               : (working ? assets::DwellerAnimation::Work
+                          : assets::DwellerAnimation::Idle);
+    const auto safe_archetype =
+        assets::safe_dweller_archetype(archetype);
     const std::size_t frame = assets::dweller_animation_frame(
         simulation_tick, animation, phase);
     const auto region = assets::dweller_atlas_region(
-        archetype, animation, frame);
+        safe_archetype, animation, frame);
 
     constexpr float atlas_width =
         static_cast<float>(assets::kGeneratedDwellerAtlasWidth);
@@ -158,43 +158,24 @@ void DwellerBillboardRenderer::build(
     const ShelterCamera& camera,
     const ShelterSceneState3D& state) noexcept {
     vertex_count_ = 0;
-    const int active_rooms = std::clamp(state.rooms, 0, 6);
-    if (state.resident_room >= 0 &&
-        state.resident_room < active_rooms) {
-        const int room = state.resident_room;
-        const float room_x = layout::kRoomX[room];
-        const float room_y = layout::kRoomY[room];
-        if (!camera.visible(room_x,
-                            room_y,
-                            layout::kRoomWidth,
-                            layout::kRoomHeight)) {
-            return;
+    const std::size_t resident_count =
+        std::min(state.resident_count, state.residents.size());
+    for (std::size_t index = 0; index < resident_count; ++index) {
+        const ResidentRenderEntry& resident = state.residents[index];
+        if (!camera.visible(resident.world_x,
+                            resident.world_y,
+                            kDwellerWorldWidth,
+                            kDwellerWorldHeight)) {
+            continue;
         }
-        const float resident_x =
-            room_x + room_visual_profile(room).resident_clear_x;
-        append_dweller(resident_x,
-                        room_y + 17.0f,
+        append_dweller(resident.world_x,
+                        resident.world_y,
                         kDwellerDepthLayer,
-                        room,
-                        true,
+                        resident.archetype,
+                        resident.moving,
+                        resident.working,
                         state.animation_tick,
-                        0u);
-        return;
-    }
-
-    const int floor = std::clamp(state.selected_room / 2, 0, 2);
-    const float elevator_y = layout::kRoomY[floor * 2] + 18.0f;
-    if (camera.visible(layout::kElevatorX,
-                       elevator_y,
-                       layout::kElevatorWidth,
-                       kDwellerWorldHeight)) {
-        append_dweller(layout::kElevatorX + 4.5f,
-                        elevator_y,
-                        kDwellerDepthLayer,
-                        5,
-                        false,
-                        state.animation_tick,
-                        1u);
+                        resident.animation_phase);
     }
 }
 

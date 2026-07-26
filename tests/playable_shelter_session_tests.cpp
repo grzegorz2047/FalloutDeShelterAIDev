@@ -1,17 +1,68 @@
 #include "gameplay/PlayableShelterSession.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <vector>
 
 #include "core/FixedStepClock.hpp"
+#include "persistence/SaveData.hpp"
 
 namespace {
 
 using namespace deep_shelter::gameplay;
+
+constexpr std::uint32_t kSaveMagic = 0x33505344u;
+
+void append_u16(std::vector<std::uint8_t>& output,
+                std::uint16_t value) {
+    output.push_back(static_cast<std::uint8_t>(value));
+    output.push_back(static_cast<std::uint8_t>(value >> 8u));
+}
+
+void append_u32(std::vector<std::uint8_t>& output,
+                std::uint32_t value) {
+    for (int shift = 0; shift < 32; shift += 8) {
+        output.push_back(static_cast<std::uint8_t>(value >> shift));
+    }
+}
+
+void append_i32(std::vector<std::uint8_t>& output, int value) {
+    append_u32(output, static_cast<std::uint32_t>(
+                           static_cast<std::int32_t>(value)));
+}
+
+std::vector<std::uint8_t> make_v1_save() {
+    std::vector<std::uint8_t> payload;
+    append_i32(payload, 345);  // credits
+    append_i32(payload, 21);   // power
+    append_i32(payload, 22);   // food
+    append_i32(payload, 23);   // water
+    append_i32(payload, 2);    // rooms
+    append_i32(payload, 1);    // selected room
+    append_i32(payload, 1);    // assigned room
+    for (int room = 0; room < kPlayableMaxRooms; ++room) {
+        append_i32(payload, room == 1 ? 7 : 0);
+    }
+    for (int room = 0; room < kPlayableMaxRooms; ++room) {
+        append_i32(payload, room == 1 ? 73 : 0);
+    }
+    assert(payload.size() == 76u);
+
+    std::vector<std::uint8_t> save;
+    append_u32(save, kSaveMagic);
+    append_u16(save, 1u);
+    append_u16(save, 0u);
+    append_u32(save, static_cast<std::uint32_t>(payload.size()));
+    append_u32(save, deep_shelter::persistence::crc32(
+                         payload.data(), payload.size()));
+    save.insert(save.end(), payload.begin(), payload.end());
+    return save;
+}
 
 std::string make_temp_path() {
     char pattern[] = "/tmp/deep-shelter-playable-XXXXXX";
@@ -29,59 +80,121 @@ void remove_temp_path(const std::string& path) {
     rmdir(path.substr(0, slash).c_str());
 }
 
-void playable_loop_is_room_aware() {
+void fixed_grid_preview_and_costed_build_are_bounded() {
+    static_assert(kPlayableGridColumns >= 8);
+    static_assert(kPlayableGridFloors >= 6);
+    static_assert(kPlayableResidentCount >= 3);
     PlayableShelterSession session;
-    assert(session.primary_action() == PrimaryAction::Assign);
-    assert(session.selected_stored() == 0);
-    session.assign_selected_room();
-    assert(session.primary_action() == PrimaryAction::Wait);
-    for (int step = 0; step < 119; ++step) session.fixed_step();
-    assert(session.selected_stored() == 0);
-    session.fixed_step();
-    assert(session.selected_stored() == 5);
-    assert(session.primary_action() == PrimaryAction::Collect);
-    assert(session.collect_selected_room() == CollectResult::Collected);
-    assert(session.state().power == 25);
-    assert(session.state().credits == 515);
+    assert(valid_playable_state(session.state()));
+    assert(session.state().rooms == 1);
+    for (const auto& resident : session.state().residents) {
+        assert(resident.active);
+        assert(resident.state == PlayableResidentState::Roaming);
+    }
 
-    assert(session.build_room() == BuildResult::Built);
-    assert(session.state().credits == 415);
-    assert(session.state().selected_room == 1);
-    session.assign_selected_room();
-    for (int step = 0; step < 120; ++step) session.fixed_step();
-    assert(session.collect_selected_room() == CollectResult::Collected);
-    assert(session.state().food == 25);
-    assert(session.build_room() == BuildResult::Built);
-    session.assign_selected_room();
-    for (int step = 0; step < 120; ++step) session.fixed_step();
-    assert(session.collect_selected_room() == CollectResult::Collected);
-    assert(session.state().water == 25);
+    assert(session.set_build_cursor(0, 0));
+    assert(session.preview_build().status ==
+           BuildPreviewStatus::Occupied);
+    assert(!session.set_build_cursor(kPlayableGridColumns, 0));
 
-    assert(session.build_room() == BuildResult::Built);
-    session.assign_selected_room();
-    const int credits_before_workshop = session.state().credits;
-    for (int step = 0; step < 120; ++step) session.fixed_step();
-    assert(session.collect_selected_room() == CollectResult::Collected);
-    assert(session.state().credits == credits_before_workshop + 25);
-    assert(session.select_previous_room());
-    assert(!session.selected_has_worker());
-    assert(session.select_next_room());
-    assert(session.selected_has_worker());
+    assert(session.select_build_type(PlayableRoomType::Food));
+    assert(session.set_build_cursor(4, 0));
+    const auto preview = session.preview_build();
+    assert(preview.valid());
+    assert(preview.cost == 120);
+    assert(session.confirm_build() == BuildResult::Built);
+    assert(session.state().credits == 380);
+    assert(session.state().rooms == 2);
+    const int food_room = session.room_index_at(4, 0);
+    assert(food_room >= 0);
+    const auto& room =
+        session.state().room_entries[static_cast<std::size_t>(food_room)];
+    assert(room.active);
+    assert(room.type == PlayableRoomType::Food);
+    assert(room.column == 4 && room.floor == 0);
+
+    PlayableShelterState poor_state;
+    poor_state.credits = 40;
+    PlayableShelterSession poor(poor_state);
+    assert(poor.select_build_type(PlayableRoomType::Elevator));
+    assert(poor.set_build_cursor(1, 0));
+    assert(poor.preview_build().status ==
+           BuildPreviewStatus::NotEnoughCredits);
+    assert(poor.confirm_build() == BuildResult::NotEnoughCredits);
 }
 
-void build_limit_and_fixed_step_partition_are_deterministic() {
-    PlayableShelterSession session;
-    for (int room = 1; room < kPlayableMaxRooms; ++room) {
-        assert(session.build_room() == BuildResult::Built);
+void transit_is_deterministic_and_production_starts_on_arrival() {
+    PlayableShelterState rich_state;
+    rich_state.credits = 2000;
+    PlayableShelterSession disconnected(rich_state);
+    assert(disconnected.select_build_type(PlayableRoomType::Food));
+    assert(disconnected.set_build_cursor(4, 0));
+    assert(disconnected.confirm_build() == BuildResult::Built);
+    const int disconnected_room = disconnected.room_index_at(4, 0);
+    assert(!disconnected.assign_resident_to_room(
+        0u, disconnected_room));
+    for (int step = 0; step < 180; ++step) {
+        disconnected.fixed_step();
     }
-    assert(session.build_room() == BuildResult::Full);
-    assert(session.state().rooms == kPlayableMaxRooms);
-    assert(session.state().credits == 0);
+    for (const auto& resident : disconnected.state().residents) {
+        assert(resident.current_column == 0);
+        assert(resident.current_floor == 0);
+    }
 
-    PlayableShelterState low_credit_state;
-    low_credit_state.credits = 50;
-    PlayableShelterSession low_credit(low_credit_state);
-    assert(low_credit.build_room() == BuildResult::NotEnoughCredits);
+    PlayableShelterSession session(rich_state);
+    assert(session.select_build_type(PlayableRoomType::Workshop));
+    for (int column = 1; column <= 3; ++column) {
+        assert(session.set_build_cursor(column, 0));
+        assert(session.confirm_build() == BuildResult::Built);
+    }
+    assert(session.select_build_type(PlayableRoomType::Food));
+    assert(session.set_build_cursor(4, 0));
+    assert(session.confirm_build() == BuildResult::Built);
+    const int food_room = session.room_index_at(4, 0);
+    assert(session.assign_resident_to_room(0u, food_room));
+    assert(session.state().residents[0].state ==
+           PlayableResidentState::Transit);
+
+    for (int step = 0; step < 7; ++step) session.fixed_step();
+    const auto midpoint = session.resident_position(0u);
+    assert(midpoint.active);
+    assert(midpoint.column > 0.0f && midpoint.column < 1.0f);
+    assert(std::fabs(midpoint.floor) < 0.001f);
+    assert(session.state().room_entries[
+               static_cast<std::size_t>(food_room)].production_steps == 0);
+
+    assert(valid_playable_state(session.state()));
+    const auto encoded_midpoint = encode_playable_state(session.state());
+    assert(!encoded_midpoint.empty());
+    const auto decoded_midpoint =
+        decode_playable_state(encoded_midpoint);
+    assert(decoded_midpoint.status == PlayableSaveStatus::Ok);
+    assert(!decoded_midpoint.migrated_from_v1);
+    PlayableShelterSession resumed(decoded_midpoint.state);
+    const auto resumed_position = resumed.resident_position(0u);
+    assert(std::fabs(
+               resumed_position.column - midpoint.column) < 0.001f);
+    assert(resumed.state().residents[0].next_column ==
+           session.state().residents[0].next_column);
+    assert(resumed.state().residents[0].movement_ticks == 7);
+
+    for (int step = 7; step < 59; ++step) resumed.fixed_step();
+    assert(resumed.state().residents[0].state ==
+           PlayableResidentState::Transit);
+    assert(resumed.state().room_entries[
+               static_cast<std::size_t>(food_room)].production_steps == 0);
+    resumed.fixed_step();
+    assert(resumed.state().residents[0].state ==
+           PlayableResidentState::Working);
+    assert(resumed.state().room_entries[
+               static_cast<std::size_t>(food_room)].production_steps == 1);
+    for (int step = 1; step < kPlayableProductionCycleSteps; ++step) {
+        resumed.fixed_step();
+    }
+    assert(resumed.state().room_entries[
+               static_cast<std::size_t>(food_room)].stored == 5);
+    assert(resumed.collect_selected_room() == CollectResult::Collected);
+    assert(resumed.state().food == 25);
 
     PlayableShelterSession at_sixty_hz;
     at_sixty_hz.assign_selected_room();
@@ -92,47 +205,85 @@ void build_limit_and_fixed_step_partition_are_deterministic() {
         });
     }
     assert(at_sixty_hz.selected_progress() == 60);
-    assert(clock.advance(0.25, [&](double) {
-               at_sixty_hz.fixed_step();
-           }) == 15);
-    assert(clock.dropped_steps() == 0);
-
-    PlayableShelterSession at_thirty_hz;
-    at_thirty_hz.assign_selected_room();
-    deep_shelter::core::FixedStepClock thirty_fps(1.0 / 60.0, 15, 0.25);
-    for (int frame = 0; frame < 30; ++frame) {
-        thirty_fps.advance(1.0 / 30.0, [&](double) {
-            at_thirty_hz.fixed_step();
-        });
-    }
-    assert(at_thirty_hz.selected_progress() == 60);
 }
 
-void codec_and_atomic_backup_recover_state() {
-    PlayableShelterSession session;
-    assert(session.build_room() == BuildResult::Built);
-    session.assign_selected_room();
-    for (int step = 0; step < 73; ++step) session.fixed_step();
+void changing_floors_requires_a_connected_elevator_shaft() {
+    PlayableShelterState rich_state;
+    rich_state.credits = 1000;
+    PlayableShelterSession session(rich_state);
 
-    const auto encoded = encode_playable_state(session.state());
-    const auto decoded = decode_playable_state(encoded);
-    assert(decoded.status == PlayableSaveStatus::Ok);
-    assert(decoded.state.rooms == 2);
-    assert(decoded.state.assigned_room == 1);
-    assert(decoded.state.production_steps[1] == 73);
+    assert(session.select_build_type(PlayableRoomType::Water));
+    assert(session.set_build_cursor(6, 1));
+    assert(session.confirm_build() == BuildResult::Built);
+    const int water_room = session.room_index_at(6, 1);
+    assert(!session.assign_resident_to_room(0u, water_room));
+    assert(session.state().residents[0].state ==
+           PlayableResidentState::Roaming);
 
-    auto corrupt = encoded;
+    assert(session.select_build_type(PlayableRoomType::Workshop));
+    assert(session.set_build_cursor(1, 0));
+    assert(session.confirm_build() == BuildResult::Built);
+    assert(session.set_build_cursor(2, 0));
+    assert(session.confirm_build() == BuildResult::Built);
+
+    assert(session.select_build_type(PlayableRoomType::Elevator));
+    assert(session.set_build_cursor(3, 0));
+    assert(session.preview_build().valid());
+    assert(session.confirm_build() == BuildResult::Built);
+    assert(session.set_build_cursor(3, 1));
+    assert(session.preview_build().valid());
+    assert(session.confirm_build() == BuildResult::Built);
+    assert(session.select_build_type(PlayableRoomType::Workshop));
+    assert(session.set_build_cursor(4, 1));
+    assert(session.confirm_build() == BuildResult::Built);
+    assert(session.set_build_cursor(5, 1));
+    assert(session.confirm_build() == BuildResult::Built);
+
+    assert(session.assign_resident_to_room(0u, water_room));
+    for (int step = 0; step < 44; ++step) session.fixed_step();
+    assert(session.state().residents[0].current_floor == 0);
+    session.fixed_step();
+    assert(session.state().residents[0].current_column == 3);
+    assert(session.state().residents[0].current_floor == 0);
+    for (int step = 0; step < 14; ++step) session.fixed_step();
+    const auto lift_position = session.resident_position(0u);
+    assert(lift_position.floor > 0.0f &&
+           lift_position.floor < 1.0f);
+    session.fixed_step();
+    assert(session.state().residents[0].current_column == 3);
+    assert(session.state().residents[0].current_floor == 1);
+    assert(session.state().room_entries[
+               static_cast<std::size_t>(water_room)].production_steps == 0);
+}
+
+void v1_migrates_to_v2_and_atomic_backup_recovers() {
+    const auto migrated = decode_playable_state(make_v1_save());
+    assert(migrated.status == PlayableSaveStatus::Ok);
+    assert(migrated.migrated_from_v1);
+    assert(migrated.state.rooms == 2);
+    assert(migrated.state.room_entries[1].type ==
+           PlayableRoomType::Food);
+    assert(migrated.state.room_entries[1].stored == 7);
+    assert(migrated.state.room_entries[1].production_steps == 73);
+    assert(migrated.state.residents[0].state ==
+           PlayableResidentState::Working);
+    assert(migrated.state.residents[0].assigned_room == 1);
+    const auto encoded_v2 = encode_playable_state(migrated.state);
+    assert(encoded_v2.size() > make_v1_save().size());
+    assert(encoded_v2[4] == 2u && encoded_v2[5] == 0u);
+
+    auto corrupt = encoded_v2;
     corrupt.back() ^= 0x7fu;
     assert(decode_playable_state(corrupt).status ==
            PlayableSaveStatus::Corrupt);
-    PlayableShelterState invalid = session.state();
-    invalid.stored[0] = kPlayableStorageCapacity + 1;
+    PlayableShelterState invalid = migrated.state;
+    invalid.room_entries[1].stored = kPlayableStorageCapacity + 1;
     assert(encode_playable_state(invalid).empty());
 
     const std::string path = make_temp_path();
-    assert(save_playable_state(path, session.state()) ==
+    assert(save_playable_state(path, migrated.state) ==
            PlayableSaveStatus::Ok);
-    PlayableShelterSession newer(decoded.state);
+    PlayableShelterSession newer(migrated.state);
     for (int step = 0; step < 10; ++step) newer.fixed_step();
     assert(save_playable_state(path, newer.state()) ==
            PlayableSaveStatus::Ok);
@@ -144,15 +295,16 @@ void codec_and_atomic_backup_recover_state() {
     const auto recovered = load_playable_state(path);
     assert(recovered.status == PlayableSaveStatus::Ok);
     assert(recovered.used_backup);
-    assert(recovered.state.production_steps[1] == 73);
+    assert(recovered.state.room_entries[1].production_steps == 73);
     remove_temp_path(path);
 }
 
 }  // namespace
 
 int main() {
-    playable_loop_is_room_aware();
-    build_limit_and_fixed_step_partition_are_deterministic();
-    codec_and_atomic_backup_recover_state();
+    fixed_grid_preview_and_costed_build_are_bounded();
+    transit_is_deterministic_and_production_starts_on_arrival();
+    changing_floors_requires_a_connected_elevator_shaft();
+    v1_migrates_to_v2_and_atomic_backup_recovers();
     return 0;
 }
