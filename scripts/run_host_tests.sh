@@ -3,27 +3,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT/build/host-tests"
-V3_BOOTSTRAPPED=0
-V3_LOG="$ROOT/build.log"
-
-exit_v3_gate() {
-  local status=$?
-  trap - ERR
-  exit "$status"
-}
-
-if [[ "${GITHUB_ACTIONS:-}" == "true" ]] &&
-   [[ -f "$ROOT/scripts/apply_room_lifecycle_v3_source.yml" ]] &&
-   ! grep -q 'kPlayableSaveVersionV3' "$ROOT/source/PlayableShelterSession.cpp"; then
-  git fetch origin agent/playable-room-lifecycle
-  git checkout -B agent/playable-room-lifecycle origin/agent/playable-room-lifecycle
-  V3_BOOTSTRAPPED=1
-  : > "$V3_LOG"
-  exec > >(tee -a "$V3_LOG") 2>&1
-  trap exit_v3_gate ERR
-  python3 scripts/v3_ci_bootstrap.py
-fi
-
 mkdir -p "$BUILD_DIR"
 
 ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
@@ -128,19 +107,4 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
-
-if [[ "$V3_BOOTSTRAPPED" == "1" ]]; then
-  trap - ERR
-  rm -f room-lifecycle-v3-patch.log corrected-v3-patch.log build.log
-  git config user.name github-actions[bot]
-  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-  git add include/gameplay/PlayableShelterSession.hpp \
-          source/PlayableShelterSession.cpp \
-          tests/playable_shelter_session_tests.cpp \
-          room-lifecycle-v3-patch.log \
-          corrected-v3-patch.log
-  git commit -m "Persist playable room lifecycle in save V3"
-  git push origin HEAD:agent/playable-room-lifecycle
-fi
-
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
