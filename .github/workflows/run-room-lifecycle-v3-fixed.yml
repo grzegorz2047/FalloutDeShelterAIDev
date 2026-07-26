@@ -1,16 +1,16 @@
 name: Run corrected room lifecycle V3 patch
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - agent/playable-room-lifecycle
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.head_ref == 'agent/playable-room-lifecycle' && github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
