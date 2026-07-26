@@ -212,6 +212,7 @@ struct PlayableLoadResult {
     PlayableShelterState state{};
     bool used_backup = false;
     bool migrated_from_v1 = false;
+    bool migrated_from_v2 = false;
 };
 
 [[nodiscard]] bool valid_playable_state(
