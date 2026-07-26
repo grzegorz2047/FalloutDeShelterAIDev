@@ -28,16 +28,10 @@ jobs:
           end = source.index(end_marker, start)
           lines = source[start:end].splitlines()
           script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
-          old = "'    bool migrated_from_v1 = false;\\n};\\n'"
-          new = "'    bool migrated_from_v1 = false;\\n'"
-          if old not in script:
-              raise SystemExit('migration anchor literal missing')
-          script = script.replace(old, new, 1)
-          old = "'    bool migrated_from_v1 = false;\\n    bool migrated_from_v2 = false;\\n};\\n'"
-          new = "'    bool migrated_from_v1 = false;\\n    bool migrated_from_v2 = false;\\n'"
-          if old not in script:
-              raise SystemExit('migration replacement literal missing')
-          Path('/tmp/apply_room_lifecycle_v3.py').write_text(script.replace(old, new, 1))
+          header_start = script.index("header = Path('include/gameplay/PlayableShelterSession.hpp')")
+          source_start = script.index("source = Path('source/PlayableShelterSession.cpp')", header_start)
+          script = script[:header_start] + script[source_start:]
+          Path('/tmp/apply_room_lifecycle_v3.py').write_text(script)
           PY
           set +e
           python3 /tmp/apply_room_lifecycle_v3.py > corrected-v3-patch.log 2>&1
