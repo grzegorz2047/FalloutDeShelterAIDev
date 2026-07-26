@@ -299,15 +299,35 @@ void playable_room_groups_upgrade_and_demolish_are_atomic() {
     assert(session.state().room_entries[static_cast<std::size_t>(first)].group_id ==
            session.state().room_entries[static_cast<std::size_t>(middle)].group_id);
 
+    PlayableShelterState evacuation_state = session.state();
+    PlayableShelterSession evacuation(evacuation_state);
+    const int evacuation_room = evacuation.room_index_at(2, 0);
+    assert(evacuation_room >= 0);
+    assert(evacuation.assign_resident_to_room(0u, evacuation_room));
+    const auto evacuation_preview = evacuation.preview_demolish_selected();
+    assert(evacuation_preview.allowed());
+    assert(evacuation_preview.residents_affected == 1);
+    assert(evacuation.confirm_demolish_selected() ==
+           RoomLifecycleResult::Applied);
+    assert(evacuation.room_index_at(2, 0) < 0);
+    const auto& evacuated = evacuation.state().residents[0];
+    assert(evacuated.active);
+    assert(evacuated.assigned_room == -1);
+    assert(evacuated.state == PlayableResidentState::Roaming);
+    assert(evacuation.room_index_at(evacuated.current_column,
+                                    evacuated.current_floor) >= 0);
+    assert(valid_playable_state(evacuation.state()));
+
     PlayableShelterState blocked_state = session.state();
+    const int blocked_room = blocked_state.selected_room;
+    blocked_state.room_entries[static_cast<std::size_t>(blocked_room)].stored = 1;
     PlayableShelterSession blocked(blocked_state);
-    const int blocked_room = blocked.room_index_at(2, 0);
-    assert(blocked.assign_resident_to_room(0u, blocked_room));
     assert(blocked.preview_demolish_selected().result ==
-           RoomLifecycleResult::UnsafeResidents);
+           RoomLifecycleResult::UnsafeStoredResources);
     assert(blocked.confirm_demolish_selected() ==
-           RoomLifecycleResult::UnsafeResidents);
-    assert(blocked.room_index_at(2, 0) == blocked_room);
+           RoomLifecycleResult::UnsafeStoredResources);
+    assert(blocked.state().room_entries[static_cast<std::size_t>(blocked_room)].active);
+    assert(blocked.state().room_entries[static_cast<std::size_t>(blocked_room)].stored == 1);
     assert(valid_playable_state(blocked.state()));
 }
 

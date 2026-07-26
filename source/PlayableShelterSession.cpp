@@ -1025,15 +1025,28 @@ PlayableShelterSession::preview_demolish_selected() const noexcept {
     preview.credit_delta = demolition_refund(selected);
     preview.stored_units_affected = selected.stored;
     preview.production_steps_affected = selected.production_steps;
+
+    PlayableShelterState candidate = state_;
+    candidate.room_entries[static_cast<std::size_t>(selected_index)] = {};
+    normalize_room_groups(candidate);
     for (const auto& resident : state_.residents) {
-        if (resident.active && resident.assigned_room == selected_index) {
+        if (!resident.active) continue;
+        const bool touches_removed =
+            resident.assigned_room == selected_index ||
+            (resident.current_column == selected.column &&
+             resident.current_floor == selected.floor) ||
+            (resident.next_column == selected.column &&
+             resident.next_floor == selected.floor) ||
+            (resident.destination_column == selected.column &&
+             resident.destination_floor == selected.floor);
+        const bool current_survives = traversable_cell(
+            candidate, resident.current_column, resident.current_floor);
+        if (touches_removed || !current_survives) {
             ++preview.residents_affected;
         }
     }
     if (state_.rooms <= 1) {
         preview.result = RoomLifecycleResult::LastRoom;
-    } else if (preview.residents_affected > 0) {
-        preview.result = RoomLifecycleResult::UnsafeResidents;
     } else if (preview.stored_units_affected > 0) {
         preview.result = RoomLifecycleResult::UnsafeStoredResources;
     } else if (preview.production_steps_affected > 0) {
@@ -1049,29 +1062,57 @@ PlayableShelterSession::confirm_demolish_selected() noexcept {
     const auto preview = preview_demolish_selected();
     if (!preview.allowed()) return preview.result;
     const int removed = state_.selected_room;
+    const PlayableRoomEntry removed_room = state_.room_entries[
+        static_cast<std::size_t>(removed)];
+
+    int replacement = -1;
+    int replacement_distance = kPlayableGridColumns + kPlayableGridFloors + 1;
+    std::uint64_t replacement_id = UINT64_MAX;
+    for (int index = 0; index < kPlayableRoomCapacity; ++index) {
+        const auto& room = state_.room_entries[static_cast<std::size_t>(index)];
+        if (!room.active || index == removed) continue;
+        const int distance = std::abs(room.column - removed_room.column) +
+                             std::abs(room.floor - removed_room.floor);
+        if (replacement < 0 || distance < replacement_distance ||
+            (distance == replacement_distance && room.segment_id < replacement_id)) {
+            replacement = index;
+            replacement_distance = distance;
+            replacement_id = room.segment_id;
+        }
+    }
+    if (replacement < 0) return RoomLifecycleResult::LastRoom;
+    const PlayableRoomEntry fallback = state_.room_entries[
+        static_cast<std::size_t>(replacement)];
+
     state_.credits += preview.credit_delta;
     state_.room_entries[static_cast<std::size_t>(removed)] = {};
-    for (auto& resident : state_.residents) {
-        if (resident.assigned_room == removed) {
-            resident.assigned_room = -1;
-            resident.state = PlayableResidentState::Roaming;
-        }
-    }
     normalize_room_groups(state_);
-    int replacement = -1;
-    for (int index = removed - 1; index >= 0; --index) {
-        if (state_.room_entries[static_cast<std::size_t>(index)].active) {
-            replacement = index;
-            break;
+    for (auto& resident : state_.residents) {
+        if (!resident.active) continue;
+        const bool touches_removed =
+            resident.assigned_room == removed ||
+            (resident.current_column == removed_room.column &&
+             resident.current_floor == removed_room.floor) ||
+            (resident.next_column == removed_room.column &&
+             resident.next_floor == removed_room.floor) ||
+            (resident.destination_column == removed_room.column &&
+             resident.destination_floor == removed_room.floor);
+        const bool current_survives = traversable_cell(
+            state_, resident.current_column, resident.current_floor);
+        if (!touches_removed && current_survives) continue;
+
+        if (!current_survives) {
+            resident.current_column = fallback.column;
+            resident.current_floor = fallback.floor;
         }
-    }
-    if (replacement < 0) {
-        for (int index = removed + 1; index < kPlayableRoomCapacity; ++index) {
-            if (state_.room_entries[static_cast<std::size_t>(index)].active) {
-                replacement = index;
-                break;
-            }
-        }
+        resident.next_column = resident.current_column;
+        resident.next_floor = resident.current_floor;
+        resident.destination_column = fallback.column;
+        resident.destination_floor = fallback.floor;
+        resident.assigned_room = -1;
+        resident.state = PlayableResidentState::Roaming;
+        resident.movement_ticks = 0;
+        resident.roaming_ticks = 0;
     }
     state_.selected_room = replacement;
     sync_legacy_view();
