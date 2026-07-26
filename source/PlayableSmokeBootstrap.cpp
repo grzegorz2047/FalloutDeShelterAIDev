@@ -17,8 +17,7 @@ constexpr const char* kSmokePhaseOneLogPath =
     "sdmc:/DeepShelter3D_playable_smoke.log";
 constexpr const char* kSmokePhaseTwoLogPath =
     "sdmc:/DeepShelter3D_playable_smoke_resume.log";
-constexpr const char* kSmokeSavePath =
-    "sdmc:/DeepShelter3D_playable_smoke_save";
+constexpr const char* kSmokeSavePath = "sdmc:/DS3D_smoke";
 
 bool consume_flag(const char* path) noexcept {
     FILE* flag = std::fopen(path, "rb");
@@ -85,9 +84,10 @@ void run_phase_one(PlayableShelterState& output) noexcept {
         for (int step = 0; step < 7; ++step) smoke.fixed_step();
     }
 
-    const bool saved =
-        ok && save_playable_state(kSmokeSavePath, smoke.state()) ==
-                  PlayableSaveStatus::Ok;
+    const PlayableSaveStatus save_status =
+        ok ? save_playable_state(kSmokeSavePath, smoke.state())
+           : PlayableSaveStatus::IoError;
+    const bool saved = save_status == PlayableSaveStatus::Ok;
     const bool resume_armed = saved && create_flag(kSmokeResumeFlagPath);
     ok = ok && saved && resume_armed;
     if (ok) output = smoke.state();
@@ -109,7 +109,8 @@ void run_phase_one(PlayableShelterState& output) noexcept {
             "DEEP_SHELTER_PLAYABLE phase=build status=%s rooms=%d "
             "credits=%d elevators=%d power=%d food=%d selected=%d "
             "assigned=%d resident_state=%s movement_ticks=%d "
-            "invalid_result=%s invalid_unchanged=%d saved=%d\n",
+            "invalid_result=%s invalid_unchanged=%d saved=%d "
+            "save_status=%d\n",
             ok ? "ok" : "failed",
             smoke.state().rooms,
             smoke.state().credits,
@@ -124,7 +125,8 @@ void run_phase_one(PlayableShelterState& output) noexcept {
                 ? "invalid-placement"
                 : "unexpected",
             invalid_unchanged ? 1 : 0,
-            saved ? 1 : 0);
+            saved ? 1 : 0,
+            static_cast<int>(save_status));
         std::fclose(log);
     }
 }
