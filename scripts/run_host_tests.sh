@@ -88,6 +88,7 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
   -I"$ROOT/include" \
   "$ROOT/tests/playable_shelter_session_tests.cpp" \
   "$ROOT/source/PlayableShelterSession.cpp" \
+  "$ROOT/source/PlayableSmokeBootstrap.cpp" \
   "$ROOT/source/SaveData.cpp" \
   "$ROOT/source/FixedStepClock.cpp" \
   -o "$BUILD_DIR/playable_shelter_session_tests"

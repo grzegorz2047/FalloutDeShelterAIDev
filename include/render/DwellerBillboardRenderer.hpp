@@ -41,7 +41,8 @@ private:
     bool append_dweller(float x,
                          float y,
                          float z,
-                         int room_index,
+                         int archetype,
+                         bool moving,
                          bool working,
                          std::uint32_t simulation_tick,
                          std::uint32_t phase) noexcept;

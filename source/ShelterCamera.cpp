@@ -34,6 +34,12 @@ void ShelterCamera::zoom_by(float delta) noexcept {
     clamp();
 }
 
+void ShelterCamera::center_on(float world_x, float world_y) noexcept {
+    x_ = world_x - viewport_.width / (2.0f * zoom_);
+    y_ = world_y - viewport_.height / (2.0f * zoom_);
+    clamp();
+}
+
 void ShelterCamera::set_world(WorldBounds world) noexcept {
     world_ = world;
     clamp();
