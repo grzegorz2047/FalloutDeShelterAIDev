@@ -1,28 +1,104 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec > >(tee build.log) 2>&1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
-python3 "$ROOT/scripts/run_playable_save_v4_patcher.py"
 BUILD_DIR="$ROOT/build/host-tests"
 mkdir -p "$BUILD_DIR"
 
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/core_tests.cpp" "$ROOT/source/FixedStepClock.cpp" "$ROOT/source/GameStateMachine.cpp" -o "$BUILD_DIR/core_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/save_data_tests.cpp" "$ROOT/source/SaveData.cpp" -o "$BUILD_DIR/save_data_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/trusted_clock_tests.cpp" "$ROOT/source/TrustedClock.cpp" -o "$BUILD_DIR/trusted_clock_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/shelter_camera_tests.cpp" "$ROOT/source/ShelterCamera.cpp" -o "$BUILD_DIR/shelter_camera_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/scene3d_normals_tests.cpp" "$ROOT/source/Scene3D.cpp" -o "$BUILD_DIR/scene3d_normals_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/shelter_scene_layout_tests.cpp" -o "$BUILD_DIR/shelter_scene_layout_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/ui_framework_tests.cpp" "$ROOT/source/UiFramework.cpp" -o "$BUILD_DIR/ui_framework_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/shelter_grid_tests.cpp" "$ROOT/source/ShelterGrid.cpp" -o "$BUILD_DIR/shelter_grid_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/room_catalog_tests.cpp" "$ROOT/source/RoomCatalog.cpp" -o "$BUILD_DIR/room_catalog_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/playable_room_catalog_tests.cpp" "$ROOT/source/PlayableRoomCatalog.cpp" "$ROOT/source/RoomCatalog.cpp" -o "$BUILD_DIR/playable_room_catalog_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/room_lifecycle_tests.cpp" "$ROOT/source/RoomLifecycle.cpp" -o "$BUILD_DIR/room_lifecycle_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/economy_simulation_tests.cpp" "$ROOT/source/EconomySimulation.cpp" -o "$BUILD_DIR/economy_simulation_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/dweller_tests.cpp" "$ROOT/source/Dweller.cpp" -o "$BUILD_DIR/dweller_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/work_assignment_tests.cpp" "$ROOT/source/Dweller.cpp" "$ROOT/source/WorkAssignment.cpp" -o "$BUILD_DIR/work_assignment_tests"
-${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$ROOT/tests/playable_shelter_session_tests.cpp" "$ROOT/source/PlayableShelterSession.cpp" "$ROOT/source/PlayableSmokeBootstrap.cpp" "$ROOT/source/SaveData.cpp" "$ROOT/source/FixedStepClock.cpp" -o "$BUILD_DIR/playable_shelter_session_tests"
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/core_tests.cpp" \
+  "$ROOT/source/FixedStepClock.cpp" \
+  "$ROOT/source/GameStateMachine.cpp" \
+  -o "$BUILD_DIR/core_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/save_data_tests.cpp" \
+  "$ROOT/source/SaveData.cpp" \
+  -o "$BUILD_DIR/save_data_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/trusted_clock_tests.cpp" \
+  "$ROOT/source/TrustedClock.cpp" \
+  -o "$BUILD_DIR/trusted_clock_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/shelter_camera_tests.cpp" \
+  "$ROOT/source/ShelterCamera.cpp" \
+  -o "$BUILD_DIR/shelter_camera_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/scene3d_normals_tests.cpp" \
+  "$ROOT/source/Scene3D.cpp" \
+  -o "$BUILD_DIR/scene3d_normals_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/shelter_scene_layout_tests.cpp" \
+  -o "$BUILD_DIR/shelter_scene_layout_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/ui_framework_tests.cpp" \
+  "$ROOT/source/UiFramework.cpp" \
+  -o "$BUILD_DIR/ui_framework_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/shelter_grid_tests.cpp" \
+  "$ROOT/source/ShelterGrid.cpp" \
+  -o "$BUILD_DIR/shelter_grid_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/room_catalog_tests.cpp" \
+  "$ROOT/source/RoomCatalog.cpp" \
+  -o "$BUILD_DIR/room_catalog_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/playable_room_catalog_tests.cpp" \
+  "$ROOT/source/PlayableRoomCatalog.cpp" \
+  "$ROOT/source/RoomCatalog.cpp" \
+  -o "$BUILD_DIR/playable_room_catalog_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/room_lifecycle_tests.cpp" \
+  "$ROOT/source/RoomLifecycle.cpp" \
+  -o "$BUILD_DIR/room_lifecycle_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/economy_simulation_tests.cpp" \
+  "$ROOT/source/EconomySimulation.cpp" \
+  -o "$BUILD_DIR/economy_simulation_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/dweller_tests.cpp" \
+  "$ROOT/source/Dweller.cpp" \
+  -o "$BUILD_DIR/dweller_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/work_assignment_tests.cpp" \
+  "$ROOT/source/Dweller.cpp" \
+  "$ROOT/source/WorkAssignment.cpp" \
+  -o "$BUILD_DIR/work_assignment_tests"
+
+${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/playable_shelter_session_tests.cpp" \
+  "$ROOT/source/PlayableShelterSession.cpp" \
+  "$ROOT/source/PlayableSmokeBootstrap.cpp" \
+  "$ROOT/source/SaveData.cpp" \
+  "$ROOT/source/FixedStepClock.cpp" \
+  -o "$BUILD_DIR/playable_shelter_session_tests"
 
 "$BUILD_DIR/core_tests"
 "$BUILD_DIR/save_data_tests"
@@ -40,12 +116,3 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$R
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
-
-tar -czf /tmp/save-v4-product.tar.gz \
-  include/gameplay/PlayableShelterSession.hpp \
-  source/PlayableShelterSession.cpp \
-  tests/playable_shelter_session_tests.cpp
-echo "SAVE_V4_PRODUCT_BEGIN"
-base64 -w0 /tmp/save-v4-product.tar.gz
-echo
-echo "SAVE_V4_PRODUCT_END"
