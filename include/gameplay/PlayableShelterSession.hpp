@@ -36,6 +36,30 @@ enum class CollectResult {
     NothingStored,
 };
 
+enum class RoomLifecycleResult {
+    Applied,
+    MissingRoom,
+    NotEnoughCredits,
+    MaximumLevel,
+    UnsafeResidents,
+    UnsafeStoredResources,
+    UnsafeProduction,
+    LastRoom,
+};
+
+struct PlayableRoomLifecyclePreview {
+    RoomLifecycleResult result = RoomLifecycleResult::MissingRoom;
+    int credit_delta = 0;
+    int group_width = 0;
+    int residents_affected = 0;
+    int stored_units_affected = 0;
+    int production_steps_affected = 0;
+
+    [[nodiscard]] bool allowed() const noexcept {
+        return result == RoomLifecycleResult::Applied;
+    }
+};
+
 enum class PlayableRoomType {
     Power,
     Food,
@@ -75,6 +99,9 @@ struct PlayableRoomEntry {
     int floor = 0;
     int stored = 0;
     int production_steps = 0;
+    std::uint64_t segment_id = 0;
+    std::uint64_t group_id = 0;
+    int level = 1;
 };
 
 struct PlayableResidentEntry {
@@ -118,6 +145,7 @@ struct PlayableShelterState {
     int build_cursor_floor = 0;
     std::array<PlayableRoomEntry, kPlayableRoomCapacity> room_entries{};
     std::array<PlayableResidentEntry, kPlayableResidentCount> residents{};
+    std::uint64_t next_segment_id = 1;
 };
 
 class PlayableShelterSession {
@@ -150,6 +178,15 @@ public:
         std::size_t resident_index, int room_index) noexcept;
     [[nodiscard]] PlayableResidentPosition resident_position(
         std::size_t resident_index) const noexcept;
+    [[nodiscard]] int selected_group_width() const noexcept;
+    [[nodiscard]] PlayableRoomLifecyclePreview
+    preview_upgrade_selected() const noexcept;
+    [[nodiscard]] RoomLifecycleResult
+    confirm_upgrade_selected() noexcept;
+    [[nodiscard]] PlayableRoomLifecyclePreview
+    preview_demolish_selected() const noexcept;
+    [[nodiscard]] RoomLifecycleResult
+    confirm_demolish_selected() noexcept;
 
     [[nodiscard]] int selected_stored() const noexcept;
     [[nodiscard]] int selected_progress() const noexcept;
@@ -175,6 +212,7 @@ struct PlayableLoadResult {
     PlayableShelterState state{};
     bool used_backup = false;
     bool migrated_from_v1 = false;
+    bool migrated_from_v2 = false;
 };
 
 [[nodiscard]] bool valid_playable_state(

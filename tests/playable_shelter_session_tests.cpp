@@ -257,7 +257,81 @@ void changing_floors_requires_a_connected_elevator_shaft() {
                static_cast<std::size_t>(water_room)].production_steps == 0);
 }
 
-void v1_migrates_to_v2_and_atomic_backup_recovers() {
+
+void playable_room_groups_upgrade_and_demolish_are_atomic() {
+    PlayableShelterState rich_state;
+    rich_state.credits = 3000;
+    PlayableShelterSession session(rich_state);
+    assert(session.select_build_type(PlayableRoomType::Food));
+    for (int column = 1; column <= 3; ++column) {
+        assert(session.set_build_cursor(column, 0));
+        assert(session.confirm_build() == BuildResult::Built);
+    }
+    const int first = session.room_index_at(1, 0);
+    const int middle = session.room_index_at(2, 0);
+    const int last = session.room_index_at(3, 0);
+    assert(first >= 0 && middle >= 0 && last >= 0);
+    const auto group = session.state().room_entries[
+        static_cast<std::size_t>(first)].group_id;
+    assert(group != 0);
+    assert(session.state().room_entries[static_cast<std::size_t>(middle)].group_id == group);
+    assert(session.state().room_entries[static_cast<std::size_t>(last)].group_id == group);
+    assert(session.selected_group_width() == 3);
+
+    const int credits_before_upgrade = session.state().credits;
+    const auto upgrade = session.preview_upgrade_selected();
+    assert(upgrade.allowed());
+    assert(upgrade.group_width == 3);
+    assert(upgrade.credit_delta == -225);
+    assert(session.confirm_upgrade_selected() == RoomLifecycleResult::Applied);
+    assert(session.state().credits == credits_before_upgrade - 225);
+    assert(session.state().room_entries[static_cast<std::size_t>(first)].level == 2);
+    assert(session.state().room_entries[static_cast<std::size_t>(middle)].level == 2);
+    assert(session.state().room_entries[static_cast<std::size_t>(last)].level == 2);
+
+    const int credits_before_demolish = session.state().credits;
+    const auto demolition = session.preview_demolish_selected();
+    assert(demolition.allowed());
+    assert(demolition.credit_delta == 120);
+    assert(session.confirm_demolish_selected() == RoomLifecycleResult::Applied);
+    assert(session.state().credits == credits_before_demolish + 120);
+    assert(session.room_index_at(3, 0) < 0);
+    assert(session.state().room_entries[static_cast<std::size_t>(first)].group_id ==
+           session.state().room_entries[static_cast<std::size_t>(middle)].group_id);
+
+    PlayableShelterState evacuation_state = session.state();
+    PlayableShelterSession evacuation(evacuation_state);
+    const int evacuation_room = evacuation.room_index_at(2, 0);
+    assert(evacuation_room >= 0);
+    assert(evacuation.assign_resident_to_room(0u, evacuation_room));
+    const auto evacuation_preview = evacuation.preview_demolish_selected();
+    assert(evacuation_preview.allowed());
+    assert(evacuation_preview.residents_affected == 1);
+    assert(evacuation.confirm_demolish_selected() ==
+           RoomLifecycleResult::Applied);
+    assert(evacuation.room_index_at(2, 0) < 0);
+    const auto& evacuated = evacuation.state().residents[0];
+    assert(evacuated.active);
+    assert(evacuated.assigned_room == -1);
+    assert(evacuated.state == PlayableResidentState::Roaming);
+    assert(evacuation.room_index_at(evacuated.current_column,
+                                    evacuated.current_floor) >= 0);
+    assert(valid_playable_state(evacuation.state()));
+
+    PlayableShelterState blocked_state = session.state();
+    const int blocked_room = blocked_state.selected_room;
+    blocked_state.room_entries[static_cast<std::size_t>(blocked_room)].stored = 1;
+    PlayableShelterSession blocked(blocked_state);
+    assert(blocked.preview_demolish_selected().result ==
+           RoomLifecycleResult::UnsafeStoredResources);
+    assert(blocked.confirm_demolish_selected() ==
+           RoomLifecycleResult::UnsafeStoredResources);
+    assert(blocked.state().room_entries[static_cast<std::size_t>(blocked_room)].active);
+    assert(blocked.state().room_entries[static_cast<std::size_t>(blocked_room)].stored == 1);
+    assert(valid_playable_state(blocked.state()));
+}
+
+void legacy_saves_migrate_to_v3_and_atomic_backup_recovers() {
     const auto migrated = decode_playable_state(make_v1_save());
     assert(migrated.status == PlayableSaveStatus::Ok);
     assert(migrated.migrated_from_v1);
@@ -269,11 +343,28 @@ void v1_migrates_to_v2_and_atomic_backup_recovers() {
     assert(migrated.state.residents[0].state ==
            PlayableResidentState::Working);
     assert(migrated.state.residents[0].assigned_room == 1);
-    const auto encoded_v2 = encode_playable_state(migrated.state);
-    assert(encoded_v2.size() > make_v1_save().size());
-    assert(encoded_v2[4] == 2u && encoded_v2[5] == 0u);
+    const auto encoded_v3 = encode_playable_state(migrated.state);
+    assert(encoded_v3.size() > make_v1_save().size());
+    assert(encoded_v3[4] == 3u && encoded_v3[5] == 0u);
 
-    auto corrupt = encoded_v2;
+    PlayableShelterSession upgraded(migrated.state);
+    assert(upgraded.preview_upgrade_selected().allowed());
+    assert(upgraded.confirm_upgrade_selected() == RoomLifecycleResult::Applied);
+    const auto upgraded_bytes = encode_playable_state(upgraded.state());
+    const auto upgraded_roundtrip = decode_playable_state(upgraded_bytes);
+    assert(upgraded_roundtrip.status == PlayableSaveStatus::Ok);
+    assert(!upgraded_roundtrip.migrated_from_v1);
+    assert(!upgraded_roundtrip.migrated_from_v2);
+    assert(upgraded_roundtrip.state.next_segment_id == upgraded.state().next_segment_id);
+    for (std::size_t index = 0; index < upgraded.state().room_entries.size(); ++index) {
+        const auto& before = upgraded.state().room_entries[index];
+        const auto& after = upgraded_roundtrip.state.room_entries[index];
+        assert(after.segment_id == before.segment_id);
+        assert(after.group_id == before.group_id);
+        assert(after.level == before.level);
+    }
+
+    auto corrupt = encoded_v3;
     corrupt.back() ^= 0x7fu;
     assert(decode_playable_state(corrupt).status ==
            PlayableSaveStatus::Corrupt);
@@ -332,6 +423,7 @@ int main() {
     fixed_grid_preview_and_costed_build_are_bounded();
     transit_is_deterministic_and_production_starts_on_arrival();
     changing_floors_requires_a_connected_elevator_shaft();
-    v1_migrates_to_v2_and_atomic_backup_recovers();
+    playable_room_groups_upgrade_and_demolish_are_atomic();
+    legacy_saves_migrate_to_v3_and_atomic_backup_recovers();
     return 0;
 }

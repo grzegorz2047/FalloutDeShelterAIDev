@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 
 #include "assets/GeneratedUiAtlas.hpp"
 #include "core/FixedStepClock.hpp"
@@ -36,6 +37,7 @@ using deep_shelter::gameplay::PlayableSaveStatus;
 using deep_shelter::gameplay::PlayableShelterSession;
 using deep_shelter::gameplay::PlayableShelterState;
 using deep_shelter::gameplay::PrimaryAction;
+using deep_shelter::gameplay::RoomLifecycleResult;
 using deep_shelter::render::DwellerBillboardRenderer;
 using deep_shelter::render::GlowPassRenderer;
 using deep_shelter::render::RenderStats;
@@ -133,6 +135,24 @@ const char* build_result_notice(BuildResult result) {
             return "Nie mozna budowac w tej komorce.";
     }
     return "Budowa nieudana.";
+}
+
+const char* lifecycle_result_notice(RoomLifecycleResult result) {
+    switch (result) {
+        case RoomLifecycleResult::Applied: return "Operacja zakonczona.";
+        case RoomLifecycleResult::MissingRoom: return "Brak wybranego pokoju.";
+        case RoomLifecycleResult::NotEnoughCredits: return "Za malo kredytow.";
+        case RoomLifecycleResult::MaximumLevel: return "Pokoj ma maksymalny poziom.";
+        case RoomLifecycleResult::UnsafeResidents:
+            return "Najpierw ewakuuj mieszkancow lub poczekaj na przejscie.";
+        case RoomLifecycleResult::UnsafeStoredResources:
+            return "Najpierw odbierz lub przenies zasoby.";
+        case RoomLifecycleResult::UnsafeProduction:
+            return "Najpierw zakoncz aktywna produkcje.";
+        case RoomLifecycleResult::LastRoom:
+            return "Nie mozna zburzyc ostatniego pokoju.";
+    }
+    return "Operacja niedostepna.";
 }
 
 PlayableRoomType adjacent_room_type(PlayableRoomType current, int delta) {
@@ -414,7 +434,13 @@ void draw_bottom(C3D_RenderTarget* bottom,
             static_cast<std::size_t>(state.selected_room)];
         atlas.draw_icon(room_type_icon(selected.type),
                         20.0f, 48.0f, 22.0f, 22.0f, 0.35f);
-        draw_text(buffer, "POKOJ", 50.0f, 44.0f, 0.36f,
+        char room_caption[32];
+        std::snprintf(room_caption,
+                      sizeof(room_caption),
+                      "POKOJ L%d  GRUPA x%d",
+                      selected.level,
+                      session.selected_group_width());
+        draw_text(buffer, room_caption, 50.0f, 44.0f, 0.32f,
                   C2D_Color32(151, 168, 171, 255));
         draw_text(buffer, room_type_label(selected.type),
                   50.0f, 57.0f, 0.50f,
@@ -465,8 +491,10 @@ void draw_bottom(C3D_RenderTarget* bottom,
         draw_text(buffer, "DALEJ", 22.0f, 121.0f, 0.34f,
                   C2D_Color32(231, 174, 68, 255));
         draw_text(buffer,
-                  notice != nullptr ? notice : session.next_step(),
-                  68.0f, 126.0f, 0.36f,
+                  notice != nullptr
+                      ? notice
+                      : "L/R POKOJ  X ULEPSZ  Y BURZ",
+                  68.0f, 126.0f, 0.31f,
                   C2D_Color32(244, 239, 220, 255));
 
         const int focused_id = ui.focused_id().value_or(-1);
@@ -629,6 +657,8 @@ int main() {
     std::uint32_t animation_tick = 0;
     u64 previous_frame_ms = osGetTime();
     bool build_mode = false;
+    bool upgrade_confirmation = false;
+    bool demolition_confirmation = false;
 
     while (aptMainLoop()) {
         hidScanInput();
@@ -641,8 +671,6 @@ int main() {
         hidCircleRead(&circle);
         camera.pan(static_cast<float>(circle.dx) * 0.08f,
                    static_cast<float>(-circle.dy) * 0.08f);
-        if (held & KEY_X) camera.zoom_by(-0.025f);
-        if (held & KEY_Y) camera.zoom_by(0.025f);
 
         const u64 current_frame_ms = osGetTime();
         const double frame_seconds =
@@ -710,6 +738,75 @@ int main() {
                 notice_until_ms = 0;
             }
 
+            bool lifecycle_key_consumed = false;
+            if ((down & KEY_B) &&
+                (upgrade_confirmation || demolition_confirmation)) {
+                upgrade_confirmation = false;
+                demolition_confirmation = false;
+                lifecycle_key_consumed = true;
+                set_notice(notice, sizeof(notice), "Anulowano operacje pokoju.");
+                notice_until_ms = current_frame_ms + 1400u;
+            }
+            if (down & KEY_X) {
+                lifecycle_key_consumed = true;
+                if (upgrade_confirmation) {
+                    const RoomLifecycleResult result =
+                        session.confirm_upgrade_selected();
+                    upgrade_confirmation = false;
+                    set_notice(notice,
+                               sizeof(notice),
+                               lifecycle_result_notice(result));
+                    notice_until_ms = current_frame_ms + 1800u;
+                } else {
+                    const auto preview = session.preview_upgrade_selected();
+                    if (preview.allowed()) {
+                        demolition_confirmation = false;
+                        upgrade_confirmation = true;
+                        std::snprintf(notice,
+                                      sizeof(notice),
+                                      "ULEPSZ x%d: koszt %d KR. X TAK, B NIE.",
+                                      preview.group_width,
+                                      -preview.credit_delta);
+                        notice_until_ms = current_frame_ms + 60000u;
+                    } else {
+                        set_notice(notice,
+                                   sizeof(notice),
+                                   lifecycle_result_notice(preview.result));
+                        notice_until_ms = current_frame_ms + 1800u;
+                    }
+                }
+            }
+            if (down & KEY_Y) {
+                lifecycle_key_consumed = true;
+                if (demolition_confirmation) {
+                    const RoomLifecycleResult result =
+                        session.confirm_demolish_selected();
+                    demolition_confirmation = false;
+                    set_notice(notice,
+                               sizeof(notice),
+                               lifecycle_result_notice(result));
+                    notice_until_ms = current_frame_ms + 1800u;
+                    center_on_selected(camera, session);
+                    ui_availability = UiAvailability{};
+                } else {
+                    const auto preview = session.preview_demolish_selected();
+                    if (preview.allowed()) {
+                        upgrade_confirmation = false;
+                        demolition_confirmation = true;
+                        std::snprintf(notice,
+                                      sizeof(notice),
+                                      "BURZ: zwrot %d KR. Y TAK, B NIE.",
+                                      preview.credit_delta);
+                        notice_until_ms = current_frame_ms + 60000u;
+                    } else {
+                        set_notice(notice,
+                                   sizeof(notice),
+                                   lifecycle_result_notice(preview.result));
+                        notice_until_ms = current_frame_ms + 1800u;
+                    }
+                }
+            }
+
             if (down & KEY_SELECT) {
                 const auto loaded =
                     deep_shelter::gameplay::load_playable_state(kSavePath);
@@ -731,7 +828,11 @@ int main() {
             }
 
             sync_ui_availability(ui, session, ui_availability);
-            const auto action = ui.route(read_ui_input(down, held, up));
+            const auto action =
+                lifecycle_key_consumed || upgrade_confirmation ||
+                        demolition_confirmation
+                    ? std::optional<deep_shelter::ui::UiAction>{}
+                    : ui.route(read_ui_input(down, held, up));
             if (action && action->type == UiActionType::Activate) {
                 if (action->control_id == kPrimaryActionId) {
                     const PrimaryAction current = session.primary_action();

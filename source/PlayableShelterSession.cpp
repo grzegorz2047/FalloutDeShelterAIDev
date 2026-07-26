@@ -14,6 +14,7 @@ namespace {
 constexpr std::uint32_t kPlayableSaveMagic = 0x33505344u;  // DSP3
 constexpr std::uint16_t kPlayableSaveVersionV1 = 1u;
 constexpr std::uint16_t kPlayableSaveVersionV2 = 2u;
+constexpr std::uint16_t kPlayableSaveVersionV3 = 3u;
 constexpr std::size_t kPlayableSaveHeaderSize = 16u;
 constexpr std::size_t kPlayableSavePayloadSizeV1 = 76u;
 constexpr std::size_t kPlayableSaveScalarCountV2 = 10u;
@@ -27,6 +28,10 @@ constexpr std::size_t kPlayableSavePayloadSizeV2 =
      static_cast<std::size_t>(kPlayableResidentCount) *
          kPlayableResidentFieldCountV2) *
     sizeof(std::int32_t);
+constexpr std::size_t kPlayableSavePayloadSizeV3 =
+    kPlayableSavePayloadSizeV2 + sizeof(std::uint64_t) +
+    static_cast<std::size_t>(kPlayableRoomCapacity) *
+        (sizeof(std::uint64_t) * 2u + sizeof(std::int32_t));
 constexpr std::size_t kMaximumPlayableSaveSize = 4096u;
 constexpr int kRoamingPauseTicks = 60;
 
@@ -71,6 +76,71 @@ int room_cost(PlayableRoomType type) noexcept {
 bool room_produces(PlayableRoomType type) noexcept {
     return type != PlayableRoomType::Living &&
            type != PlayableRoomType::Elevator;
+}
+
+int room_index_at_state(const PlayableShelterState& state,
+                        int column,
+                        int floor) noexcept;
+
+constexpr int kPlayableMaximumRoomLevel = 3;
+constexpr int kPlayableMaximumGroupWidth = 3;
+
+int upgrade_cost(const PlayableRoomEntry& room, int group_width) noexcept {
+    return 75 * group_width * room.level;
+}
+
+int demolition_refund(const PlayableRoomEntry& room) noexcept {
+    return room_cost(room.type) * room.level / 2;
+}
+
+void normalize_room_groups(PlayableShelterState& state) noexcept {
+    std::uint64_t highest_id = 0;
+    for (const auto& room : state.room_entries) {
+        if (room.active) highest_id = std::max(highest_id, room.segment_id);
+    }
+    state.next_segment_id = std::max(state.next_segment_id, highest_id + 1);
+    for (int floor = 0; floor < kPlayableGridFloors; ++floor) {
+        for (int column = 0; column < kPlayableGridColumns; ++column) {
+            const int index = room_index_at_state(state, column, floor);
+            if (index < 0) continue;
+            auto& room = state.room_entries[static_cast<std::size_t>(index)];
+            if (room.segment_id == 0) room.segment_id = state.next_segment_id++;
+            room.group_id = room.segment_id;
+            room.level = std::max(1, std::min(room.level, kPlayableMaximumRoomLevel));
+        }
+    }
+
+    for (int floor = 0; floor < kPlayableGridFloors; ++floor) {
+        int column = 0;
+        while (column < kPlayableGridColumns) {
+            const int first_index = room_index_at_state(state, column, floor);
+            if (first_index < 0) {
+                ++column;
+                continue;
+            }
+            auto& first = state.room_entries[static_cast<std::size_t>(first_index)];
+            std::uint64_t stable_group = first.segment_id;
+            int width = 1;
+            while (width < kPlayableMaximumGroupWidth &&
+                   column + width < kPlayableGridColumns) {
+                const int candidate_index = room_index_at_state(
+                    state, column + width, floor);
+                if (candidate_index < 0) break;
+                const auto& candidate = state.room_entries[
+                    static_cast<std::size_t>(candidate_index)];
+                if (candidate.type != first.type || candidate.level != first.level) break;
+                stable_group = std::min(stable_group, candidate.segment_id);
+                ++width;
+            }
+            for (int offset = 0; offset < width; ++offset) {
+                const int member_index = room_index_at_state(
+                    state, column + offset, floor);
+                state.room_entries[static_cast<std::size_t>(member_index)].group_id =
+                    stable_group;
+            }
+            column += width;
+        }
+    }
 }
 
 PlayableRoomType legacy_room_type(int room) noexcept {
@@ -207,12 +277,14 @@ void upgrade_legacy_shape(PlayableShelterState& state) noexcept {
         resident.destination_floor = room.floor;
         resident.state = PlayableResidentState::Working;
     }
+    normalize_room_groups(state);
     sync_legacy_fields(state);
 }
 
 PlayableShelterState normalized_state(
     PlayableShelterState state) noexcept {
     upgrade_legacy_shape(state);
+    normalize_room_groups(state);
     return state;
 }
 
@@ -402,6 +474,13 @@ void append_u32(std::vector<std::uint8_t>& output,
     }
 }
 
+void append_u64(std::vector<std::uint8_t>& output,
+                std::uint64_t value) {
+    for (int shift = 0; shift < 64; shift += 8) {
+        output.push_back(static_cast<std::uint8_t>(value >> shift));
+    }
+}
+
 void append_i32(std::vector<std::uint8_t>& output, int value) {
     append_u32(output, static_cast<std::uint32_t>(
                            static_cast<std::int32_t>(value)));
@@ -424,6 +503,17 @@ bool read_u32(const std::vector<std::uint8_t>& input,
     value = 0u;
     for (int shift = 0; shift < 32; shift += 8) {
         value |= static_cast<std::uint32_t>(input[offset++]) << shift;
+    }
+    return true;
+}
+
+bool read_u64(const std::vector<std::uint8_t>& input,
+              std::size_t& offset,
+              std::uint64_t& value) noexcept {
+    if (offset + 8u > input.size()) return false;
+    value = 0u;
+    for (int shift = 0; shift < 64; shift += 8) {
+        value |= static_cast<std::uint64_t>(input[offset++]) << shift;
     }
     return true;
 }
@@ -587,6 +677,56 @@ bool read_v2_payload(const std::vector<std::uint8_t>& body,
             !read_i32(body, offset, resident.roaming_sequence)) {
             return false;
         }
+        resident.active = active != 0;
+    }
+    if (offset != body.size()) return false;
+    normalize_room_groups(state);
+    return valid_playable_state(state);
+}
+
+bool read_v3_payload(const std::vector<std::uint8_t>& body,
+                     PlayableShelterState& state) noexcept {
+    std::size_t offset = 0u;
+    if (!read_i32(body, offset, state.credits) ||
+        !read_i32(body, offset, state.power) ||
+        !read_i32(body, offset, state.food) ||
+        !read_i32(body, offset, state.water) ||
+        !read_i32(body, offset, state.rooms) ||
+        !read_i32(body, offset, state.selected_room) ||
+        !read_i32(body, offset, state.assigned_room) ||
+        !read_enum(body, offset, state.selected_build_type) ||
+        !read_i32(body, offset, state.build_cursor_column) ||
+        !read_i32(body, offset, state.build_cursor_floor) ||
+        !read_u64(body, offset, state.next_segment_id)) return false;
+    for (int& value : state.stored) if (!read_i32(body, offset, value)) return false;
+    for (int& value : state.production_steps) if (!read_i32(body, offset, value)) return false;
+    for (auto& room : state.room_entries) {
+        int active = 0;
+        if (!read_i32(body, offset, active) || (active != 0 && active != 1) ||
+            !read_enum(body, offset, room.type) ||
+            !read_i32(body, offset, room.column) ||
+            !read_i32(body, offset, room.floor) ||
+            !read_i32(body, offset, room.stored) ||
+            !read_i32(body, offset, room.production_steps) ||
+            !read_u64(body, offset, room.segment_id) ||
+            !read_u64(body, offset, room.group_id) ||
+            !read_i32(body, offset, room.level)) return false;
+        room.active = active != 0;
+    }
+    for (auto& resident : state.residents) {
+        int active = 0;
+        if (!read_i32(body, offset, active) || (active != 0 && active != 1) ||
+            !read_i32(body, offset, resident.current_column) ||
+            !read_i32(body, offset, resident.current_floor) ||
+            !read_i32(body, offset, resident.next_column) ||
+            !read_i32(body, offset, resident.next_floor) ||
+            !read_i32(body, offset, resident.destination_column) ||
+            !read_i32(body, offset, resident.destination_floor) ||
+            !read_i32(body, offset, resident.assigned_room) ||
+            !read_enum(body, offset, resident.state) ||
+            !read_i32(body, offset, resident.movement_ticks) ||
+            !read_i32(body, offset, resident.roaming_ticks) ||
+            !read_i32(body, offset, resident.roaming_sequence)) return false;
         resident.active = active != 0;
     }
     return offset == body.size() && valid_playable_state(state);
@@ -807,10 +947,176 @@ BuildResult PlayableShelterSession::confirm_build() noexcept {
     room.floor = state_.build_cursor_floor;
     room.stored = 0;
     room.production_steps = 0;
+    room.segment_id = state_.next_segment_id++;
+    room.group_id = room.segment_id;
+    room.level = 1;
     state_.credits -= preview.cost;
     state_.selected_room = slot;
+    normalize_room_groups(state_);
     sync_legacy_view();
     return BuildResult::Built;
+}
+
+int PlayableShelterSession::selected_group_width() const noexcept {
+    const auto& selected = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)];
+    int width = 0;
+    for (const auto& room : state_.room_entries) {
+        if (room.active && room.group_id == selected.group_id) ++width;
+    }
+    return width;
+}
+
+PlayableRoomLifecyclePreview
+PlayableShelterSession::preview_upgrade_selected() const noexcept {
+    PlayableRoomLifecyclePreview preview;
+    const auto& selected = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)];
+    if (!selected.active) return preview;
+    preview.group_width = selected_group_width();
+    if (selected.level >= kPlayableMaximumRoomLevel) {
+        preview.result = RoomLifecycleResult::MaximumLevel;
+        return preview;
+    }
+    const int cost = upgrade_cost(selected, preview.group_width);
+    preview.credit_delta = -cost;
+    if (state_.credits < cost) {
+        preview.result = RoomLifecycleResult::NotEnoughCredits;
+        return preview;
+    }
+    for (int index = 0; index < kPlayableRoomCapacity; ++index) {
+        const auto& room = state_.room_entries[static_cast<std::size_t>(index)];
+        if (!room.active || room.group_id != selected.group_id) continue;
+        preview.stored_units_affected += room.stored;
+        preview.production_steps_affected += room.production_steps;
+        for (const auto& resident : state_.residents) {
+            if (resident.active && resident.assigned_room == index) {
+                ++preview.residents_affected;
+            }
+        }
+    }
+    preview.result = RoomLifecycleResult::Applied;
+    return preview;
+}
+
+RoomLifecycleResult
+PlayableShelterSession::confirm_upgrade_selected() noexcept {
+    const auto preview = preview_upgrade_selected();
+    if (!preview.allowed()) return preview.result;
+    const std::uint64_t group_id = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)].group_id;
+    state_.credits += preview.credit_delta;
+    for (auto& room : state_.room_entries) {
+        if (room.active && room.group_id == group_id) ++room.level;
+    }
+    normalize_room_groups(state_);
+    sync_legacy_view();
+    return RoomLifecycleResult::Applied;
+}
+
+PlayableRoomLifecyclePreview
+PlayableShelterSession::preview_demolish_selected() const noexcept {
+    PlayableRoomLifecyclePreview preview;
+    const int selected_index = state_.selected_room;
+    const auto& selected = state_.room_entries[
+        static_cast<std::size_t>(selected_index)];
+    if (!selected.active) return preview;
+    preview.group_width = selected_group_width();
+    preview.credit_delta = demolition_refund(selected);
+    preview.stored_units_affected = selected.stored;
+    preview.production_steps_affected = selected.production_steps;
+
+    PlayableShelterState candidate = state_;
+    candidate.room_entries[static_cast<std::size_t>(selected_index)] = {};
+    normalize_room_groups(candidate);
+    for (const auto& resident : state_.residents) {
+        if (!resident.active) continue;
+        const bool touches_removed =
+            resident.assigned_room == selected_index ||
+            (resident.current_column == selected.column &&
+             resident.current_floor == selected.floor) ||
+            (resident.next_column == selected.column &&
+             resident.next_floor == selected.floor) ||
+            (resident.destination_column == selected.column &&
+             resident.destination_floor == selected.floor);
+        const bool current_survives = traversable_cell(
+            candidate, resident.current_column, resident.current_floor);
+        if (touches_removed || !current_survives) {
+            ++preview.residents_affected;
+        }
+    }
+    if (state_.rooms <= 1) {
+        preview.result = RoomLifecycleResult::LastRoom;
+    } else if (preview.stored_units_affected > 0) {
+        preview.result = RoomLifecycleResult::UnsafeStoredResources;
+    } else if (preview.production_steps_affected > 0) {
+        preview.result = RoomLifecycleResult::UnsafeProduction;
+    } else {
+        preview.result = RoomLifecycleResult::Applied;
+    }
+    return preview;
+}
+
+RoomLifecycleResult
+PlayableShelterSession::confirm_demolish_selected() noexcept {
+    const auto preview = preview_demolish_selected();
+    if (!preview.allowed()) return preview.result;
+    const int removed = state_.selected_room;
+    const PlayableRoomEntry removed_room = state_.room_entries[
+        static_cast<std::size_t>(removed)];
+
+    int replacement = -1;
+    int replacement_distance = kPlayableGridColumns + kPlayableGridFloors + 1;
+    std::uint64_t replacement_id = UINT64_MAX;
+    for (int index = 0; index < kPlayableRoomCapacity; ++index) {
+        const auto& room = state_.room_entries[static_cast<std::size_t>(index)];
+        if (!room.active || index == removed) continue;
+        const int distance = std::abs(room.column - removed_room.column) +
+                             std::abs(room.floor - removed_room.floor);
+        if (replacement < 0 || distance < replacement_distance ||
+            (distance == replacement_distance && room.segment_id < replacement_id)) {
+            replacement = index;
+            replacement_distance = distance;
+            replacement_id = room.segment_id;
+        }
+    }
+    if (replacement < 0) return RoomLifecycleResult::LastRoom;
+    const PlayableRoomEntry fallback = state_.room_entries[
+        static_cast<std::size_t>(replacement)];
+
+    state_.credits += preview.credit_delta;
+    state_.room_entries[static_cast<std::size_t>(removed)] = {};
+    normalize_room_groups(state_);
+    for (auto& resident : state_.residents) {
+        if (!resident.active) continue;
+        const bool touches_removed =
+            resident.assigned_room == removed ||
+            (resident.current_column == removed_room.column &&
+             resident.current_floor == removed_room.floor) ||
+            (resident.next_column == removed_room.column &&
+             resident.next_floor == removed_room.floor) ||
+            (resident.destination_column == removed_room.column &&
+             resident.destination_floor == removed_room.floor);
+        const bool current_survives = traversable_cell(
+            state_, resident.current_column, resident.current_floor);
+        if (!touches_removed && current_survives) continue;
+
+        if (!current_survives) {
+            resident.current_column = fallback.column;
+            resident.current_floor = fallback.floor;
+        }
+        resident.next_column = resident.current_column;
+        resident.next_floor = resident.current_floor;
+        resident.destination_column = fallback.column;
+        resident.destination_floor = fallback.floor;
+        resident.assigned_room = -1;
+        resident.state = PlayableResidentState::Roaming;
+        resident.movement_ticks = 0;
+        resident.roaming_ticks = 0;
+    }
+    state_.selected_room = replacement;
+    sync_legacy_view();
+    return RoomLifecycleResult::Applied;
 }
 
 int PlayableShelterSession::room_index_at(
@@ -1048,7 +1354,7 @@ std::vector<std::uint8_t> encode_playable_state(
     if (!valid_playable_state(state)) return {};
 
     std::vector<std::uint8_t> payload;
-    payload.reserve(kPlayableSavePayloadSizeV2);
+    payload.reserve(kPlayableSavePayloadSizeV3);
     append_i32(payload, state.credits);
     append_i32(payload, state.power);
     append_i32(payload, state.food);
@@ -1059,6 +1365,7 @@ std::vector<std::uint8_t> encode_playable_state(
     append_i32(payload, static_cast<int>(state.selected_build_type));
     append_i32(payload, state.build_cursor_column);
     append_i32(payload, state.build_cursor_floor);
+    append_u64(payload, state.next_segment_id);
     for (const int value : state.stored) append_i32(payload, value);
     for (const int value : state.production_steps) {
         append_i32(payload, value);
@@ -1070,6 +1377,9 @@ std::vector<std::uint8_t> encode_playable_state(
         append_i32(payload, room.floor);
         append_i32(payload, room.stored);
         append_i32(payload, room.production_steps);
+        append_u64(payload, room.segment_id);
+        append_u64(payload, room.group_id);
+        append_i32(payload, room.level);
     }
     for (const auto& resident : state.residents) {
         append_i32(payload, resident.active ? 1 : 0);
@@ -1085,12 +1395,12 @@ std::vector<std::uint8_t> encode_playable_state(
         append_i32(payload, resident.roaming_ticks);
         append_i32(payload, resident.roaming_sequence);
     }
-    if (payload.size() != kPlayableSavePayloadSizeV2) return {};
+    if (payload.size() != kPlayableSavePayloadSizeV3) return {};
 
     std::vector<std::uint8_t> output;
     output.reserve(kPlayableSaveHeaderSize + payload.size());
     append_u32(output, kPlayableSaveMagic);
-    append_u16(output, kPlayableSaveVersionV2);
+    append_u16(output, kPlayableSaveVersionV3);
     append_u16(output, 0u);
     append_u32(output, static_cast<std::uint32_t>(payload.size()));
     append_u32(output, persistence::crc32(
@@ -1119,12 +1429,15 @@ PlayableLoadResult decode_playable_state(
         !read_u32(bytes, offset, checksum) ||
         magic != kPlayableSaveMagic ||
         (version != kPlayableSaveVersionV1 &&
-         version != kPlayableSaveVersionV2) ||
+         version != kPlayableSaveVersionV2 &&
+         version != kPlayableSaveVersionV3) ||
         reserved != 0u ||
         (version == kPlayableSaveVersionV1 &&
          payload_size != kPlayableSavePayloadSizeV1) ||
         (version == kPlayableSaveVersionV2 &&
          payload_size != kPlayableSavePayloadSizeV2) ||
+        (version == kPlayableSaveVersionV3 &&
+         payload_size != kPlayableSavePayloadSizeV3) ||
         bytes.size() != kPlayableSaveHeaderSize + payload_size) {
         result.status = PlayableSaveStatus::Corrupt;
         return result;
@@ -1142,15 +1455,17 @@ PlayableLoadResult decode_playable_state(
     const bool parsed =
         version == kPlayableSaveVersionV1
             ? read_v1_payload(body, state)
-            : read_v2_payload(body, state);
+            : (version == kPlayableSaveVersionV2
+                   ? read_v2_payload(body, state)
+                   : read_v3_payload(body, state));
     if (!parsed) {
         result.status = PlayableSaveStatus::Corrupt;
         return result;
     }
     result.status = PlayableSaveStatus::Ok;
     result.state = state;
-    result.migrated_from_v1 =
-        version == kPlayableSaveVersionV1;
+    result.migrated_from_v1 = version == kPlayableSaveVersionV1;
+    result.migrated_from_v2 = version == kPlayableSaveVersionV2;
     return result;
 }
 
