@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdio>
 
 #include <citro2d.h>
 
@@ -60,13 +61,26 @@ using Glyph = std::array<u8, 7>;
     }
 }
 
-inline void draw(const char* value,
-                 float x,
-                 float y,
-                 float z,
-                 float scale_x,
-                 float scale_y,
-                 u32 color) noexcept {
+[[nodiscard]] inline std::array<char, 256>& text_buffer() noexcept {
+    static std::array<char, 256> value{};
+    return value;
+}
+
+inline std::size_t parse(C2D_Text*, C2D_TextBuf, const char* value) noexcept {
+    auto& buffer = text_buffer();
+    std::snprintf(buffer.data(), buffer.size(), "%s", value != nullptr ? value : "");
+    return 0;
+}
+
+inline void optimize(C2D_Text*) noexcept {}
+
+inline void draw_string(const char* value,
+                        float x,
+                        float y,
+                        float z,
+                        float scale_x,
+                        float scale_y,
+                        u32 color) noexcept {
     if (value == nullptr) return;
 
     const float pixel_width = scale_x * 2.05f;
@@ -114,4 +128,23 @@ inline void draw(const char* value,
     }
 }
 
+inline void draw(C2D_Text*,
+                 u32,
+                 float x,
+                 float y,
+                 float z,
+                 float scale_x,
+                 float scale_y,
+                 u32 color) noexcept {
+    draw_string(text_buffer().data(), x, y, z, scale_x, scale_y, color);
+}
+
 }  // namespace deep_shelter::ui::embedded_text
+
+#define C2D_TextParse(text, buffer, value) \
+    ::deep_shelter::ui::embedded_text::parse((text), (buffer), (value))
+#define C2D_TextOptimize(text) \
+    ::deep_shelter::ui::embedded_text::optimize((text))
+#define C2D_DrawText(text, flags, x, y, z, scale_x, scale_y, color) \
+    ::deep_shelter::ui::embedded_text::draw( \
+        (text), (flags), (x), (y), (z), (scale_x), (scale_y), (color))
