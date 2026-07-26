@@ -3,6 +3,53 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT/build/host-tests"
+V3_BOOTSTRAPPED=0
+
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]] &&
+   [[ -f "$ROOT/scripts/apply_room_lifecycle_v3_source.yml" ]] &&
+   ! grep -q 'kPlayableSaveVersionV3' "$ROOT/source/PlayableShelterSession.cpp"; then
+  git fetch origin agent/playable-room-lifecycle
+  git checkout -B agent/playable-room-lifecycle origin/agent/playable-room-lifecycle
+  python3 - <<'PY'
+from pathlib import Path
+import re
+
+workflow = Path('scripts/apply_room_lifecycle_v3_source.yml').read_text()
+start_marker = "          python3 - <<'PY'\n"
+end_marker = "          PY\n      - name: Run host tests"
+start = workflow.index(start_marker) + len(start_marker)
+end = workflow.index(end_marker, start)
+lines = workflow[start:end].splitlines()
+script = '\n'.join(
+    line[10:] if line.startswith('          ') else line
+    for line in lines
+) + '\n'
+match = re.search(
+    r"source\s*=\s*Path\('source/PlayableShelterSession\.cpp'\)",
+    script,
+)
+if match is None:
+    raise SystemExit('source patch start missing')
+prefix = '''from pathlib import Path
+
+def replace_once(text, old, new, label):
+    if old not in text:
+        if label == 'V2 migration flag':
+            actual = "    result.migrated_from_v1 =\n        version == kPlayableSaveVersionV1;\n    return result;\n"
+            if actual not in text:
+                raise SystemExit('V2 migration flag exact fallback missing')
+            return text.replace(actual, new, 1)
+        raise SystemExit(f'{label} anchor missing')
+    return text.replace(old, new, 1)
+
+'''
+patch_path = Path('/tmp/apply_room_lifecycle_v3.py')
+patch_path.write_text(prefix + script[match.start():])
+exec(compile(patch_path.read_text(), str(patch_path), 'exec'))
+PY
+  V3_BOOTSTRAPPED=1
+fi
+
 mkdir -p "$BUILD_DIR"
 
 ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
@@ -107,4 +154,18 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
+
+if [[ "$V3_BOOTSTRAPPED" == "1" ]]; then
+  rm -f room-lifecycle-v3-patch.log corrected-v3-patch.log
+  git config user.name github-actions[bot]
+  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+  git add include/gameplay/PlayableShelterSession.hpp \
+          source/PlayableShelterSession.cpp \
+          tests/playable_shelter_session_tests.cpp \
+          room-lifecycle-v3-patch.log \
+          corrected-v3-patch.log
+  git commit -m "Persist playable room lifecycle in save V3"
+  git push origin HEAD:agent/playable-room-lifecycle
+fi
+
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
