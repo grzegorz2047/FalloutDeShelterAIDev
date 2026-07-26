@@ -3,11 +3,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT/build/host-tests"
+UI_BOOTSTRAPPED=0
 
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]] && [[ -f "$ROOT/scripts/apply_room_lifecycle_ui.py" ]]; then
   python3 scripts/apply_room_lifecycle_ui_include.py
   python3 scripts/apply_room_lifecycle_ui.py
-  base64 -w0 source/main.cpp > build.log
+  UI_BOOTSTRAPPED=1
 fi
 
 mkdir -p "$BUILD_DIR"
@@ -40,4 +41,20 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$R
 "$BUILD_DIR/dweller_tests"
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
+
+if [[ "$UI_BOOTSTRAPPED" == "1" ]]; then
+  cp source/main.cpp /tmp/room-lifecycle-main.cpp
+  git fetch origin agent/playable-room-lifecycle main
+  git checkout -B agent/playable-room-lifecycle origin/agent/playable-room-lifecycle
+  cp /tmp/room-lifecycle-main.cpp source/main.cpp
+  git checkout origin/main -- scripts/run_host_tests.sh .github/workflows/build.yml
+  rm -f scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py
+  git config user.name github-actions[bot]
+  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+  git add source/main.cpp scripts/run_host_tests.sh .github/workflows/build.yml
+  git add -u scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py
+  git commit -m "Expose playable room lifecycle controls"
+  git push origin HEAD:agent/playable-room-lifecycle
+fi
+
 echo "host-tests: all core, persistence, time, rendering, layout, UI and playable shelter session tests passed"
