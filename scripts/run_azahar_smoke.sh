@@ -119,10 +119,14 @@ grep -q 'phase=resume status=ok' azahar-playable-smoke-resume.log
 grep -q 'restored=1' azahar-playable-smoke-resume.log
 grep -q 'rooms=5' azahar-playable-smoke-resume.log
 grep -q 'credits=180' azahar-playable-smoke-resume.log
+grep -q 'selected=1' azahar-playable-smoke-resume.log
 grep -q 'assigned=4' azahar-playable-smoke-resume.log
 grep -q 'worker_state=working' azahar-playable-smoke-resume.log
 grep -q 'worker_column=3' azahar-playable-smoke-resume.log
 grep -q 'worker_floor=1' azahar-playable-smoke-resume.log
+grep -q 'elevator_lower=1' azahar-playable-smoke-resume.log
+grep -q 'elevator_vertical=1' azahar-playable-smoke-resume.log
+grep -q 'elevator_upper=1' azahar-playable-smoke-resume.log
 grep -q 'idle_moved=1' azahar-playable-smoke-resume.log
 grep -q 'idle_assigned=-1' azahar-playable-smoke-resume.log
 grep -q 'idle_state=roaming' azahar-playable-smoke-resume.log
