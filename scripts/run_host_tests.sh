@@ -4,18 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT/build/host-tests"
 V3_BOOTSTRAPPED=0
-V3_LOG="$ROOT/v3-host-gate.log"
+V3_LOG="$ROOT/build.log"
 
-commit_v3_diagnostic() {
+exit_v3_gate() {
   local status=$?
-  if [[ "$V3_BOOTSTRAPPED" == "1" && "$status" -ne 0 ]]; then
-    trap - ERR
-    git config user.name github-actions[bot]
-    git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-    git add v3-host-gate.log
-    git commit -m "Capture V3 host gate failure" || true
-    git push origin HEAD:agent/playable-room-lifecycle || true
-  fi
+  trap - ERR
   exit "$status"
 }
 
@@ -27,7 +20,7 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" ]] &&
   V3_BOOTSTRAPPED=1
   : > "$V3_LOG"
   exec > >(tee -a "$V3_LOG") 2>&1
-  trap commit_v3_diagnostic ERR
+  trap exit_v3_gate ERR
   python3 scripts/v3_ci_bootstrap.py
 fi
 
@@ -138,15 +131,14 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
 
 if [[ "$V3_BOOTSTRAPPED" == "1" ]]; then
   trap - ERR
-  rm -f room-lifecycle-v3-patch.log corrected-v3-patch.log v3-host-gate.log
+  rm -f room-lifecycle-v3-patch.log corrected-v3-patch.log build.log
   git config user.name github-actions[bot]
   git config user.email 41898282+github-actions[bot]@users.noreply.github.com
   git add include/gameplay/PlayableShelterSession.hpp \
           source/PlayableShelterSession.cpp \
           tests/playable_shelter_session_tests.cpp \
           room-lifecycle-v3-patch.log \
-          corrected-v3-patch.log \
-          v3-host-gate.log
+          corrected-v3-patch.log
   git commit -m "Persist playable room lifecycle in save V3"
   git push origin HEAD:agent/playable-room-lifecycle
 fi
