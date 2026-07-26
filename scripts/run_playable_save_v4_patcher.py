@@ -1,14 +1,18 @@
 from pathlib import Path
 
 patcher = Path("scripts/apply_playable_save_v4.py")
-source = patcher.read_text()
-redundant = '''replace_once(
-    "source/PlayableShelterSession.cpp",
-    """bool read_v3_payload(const std::vector<std::uint8_t>& body,\n                      PlayableShelterState& state) noexcept {\n""",
-    """bool read_v3_payload(const std::vector<std::uint8_t>& body,\n                      PlayableShelterState& state) noexcept {\n""",
-)
-'''
-if redundant not in source:
+lines = patcher.read_text().splitlines(keepends=True)
+removed = False
+for index in range(len(lines) - 4):
+    if (lines[index].strip() == "replace_once(" and
+            "source/PlayableShelterSession.cpp" in lines[index + 1] and
+            "bool read_v3_payload" in lines[index + 2] and
+            "bool read_v3_payload" in lines[index + 3] and
+            lines[index + 4].strip() == ")"):
+        del lines[index:index + 5]
+        removed = True
+        break
+if not removed:
     raise SystemExit("redundant V3 assertion block was not found")
-source = source.replace(redundant, "", 1)
+source = "".join(lines)
 exec(compile(source, str(patcher), "exec"))
