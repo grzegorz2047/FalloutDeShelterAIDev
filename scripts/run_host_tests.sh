@@ -42,7 +42,7 @@ ${CXX:-g++} -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -I"$ROOT/include" "$R
 "$BUILD_DIR/work_assignment_tests"
 "$BUILD_DIR/playable_shelter_session_tests"
 
-if [[ "$UI_BOOTSTRAPPED" == "1" ]]; then
+if [[ "$UI_BOOTSTRAPPED" == "1" && "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
   git config user.name github-actions[bot]
   git config user.email 41898282+github-actions[bot]@users.noreply.github.com
   git add source/main.cpp
