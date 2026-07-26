@@ -33,6 +33,20 @@ bool create_flag(const char* path) noexcept {
     return std::fclose(flag) == 0;
 }
 
+bool seed_existing_save() noexcept {
+    const std::vector<std::uint8_t> bytes = encode_playable_state(
+        PlayableShelterState{PlayableShelterState::RawDefaultsTag{}});
+    if (bytes.empty()) return false;
+    const std::string path = std::string(kSmokeSavePath) + ".sav";
+    FILE* file = std::fopen(path.c_str(), "wb");
+    if (file == nullptr) return false;
+    const bool written =
+        std::fwrite(bytes.data(), 1u, bytes.size(), file) == bytes.size() &&
+        std::fflush(file) == 0;
+    const bool closed = std::fclose(file) == 0;
+    return written && closed;
+}
+
 const char* resident_state_label(PlayableResidentState state) noexcept {
     switch (state) {
         case PlayableResidentState::Roaming: return "roaming";
@@ -84,12 +98,13 @@ void run_phase_one(PlayableShelterState& output) noexcept {
         for (int step = 0; step < 7; ++step) smoke.fixed_step();
     }
 
+    const bool seeded = ok && seed_existing_save();
     const PlayableSaveStatus save_status =
-        ok ? save_playable_state(kSmokeSavePath, smoke.state())
-           : PlayableSaveStatus::IoError;
+        seeded ? save_playable_state(kSmokeSavePath, smoke.state())
+               : PlayableSaveStatus::IoError;
     const bool saved = save_status == PlayableSaveStatus::Ok;
     const bool resume_armed = saved && create_flag(kSmokeResumeFlagPath);
-    ok = ok && saved && resume_armed;
+    ok = ok && seeded && saved && resume_armed;
     if (ok) output = smoke.state();
 
     int elevator_count = 0;
@@ -109,7 +124,7 @@ void run_phase_one(PlayableShelterState& output) noexcept {
             "DEEP_SHELTER_PLAYABLE phase=build status=%s rooms=%d "
             "credits=%d elevators=%d power=%d food=%d selected=%d "
             "assigned=%d resident_state=%s movement_ticks=%d "
-            "invalid_result=%s invalid_unchanged=%d saved=%d "
+            "invalid_result=%s invalid_unchanged=%d seeded=%d saved=%d "
             "save_status=%d\n",
             ok ? "ok" : "failed",
             smoke.state().rooms,
@@ -125,6 +140,7 @@ void run_phase_one(PlayableShelterState& output) noexcept {
                 ? "invalid-placement"
                 : "unexpected",
             invalid_unchanged ? 1 : 0,
+            seeded ? 1 : 0,
             saved ? 1 : 0,
             static_cast<int>(save_status));
         std::fclose(log);
