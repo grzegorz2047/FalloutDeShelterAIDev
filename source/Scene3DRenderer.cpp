@@ -303,7 +303,6 @@ void Scene3DRenderer::append_room(float x,
                                   int room,
                                   bool active,
                                   bool selected,
-                                  bool resident,
                                   int stored) noexcept {
     if (!active) {
         append_cavity(mesh_, x, y, room);
@@ -315,13 +314,6 @@ void Scene3DRenderer::append_room(float x,
         const float fill = std::clamp(static_cast<float>(stored) / 30.0f, 0.0f, 1.0f);
         mesh_.append_box({x + 10.0f, y + 8.0f, -3.0f, 112.0f * fill, 4.0f, 5.0f,
                           rgba(112, 255, 177), assets::GeneratedMaterial::ControlPanel});
-    }
-    if (resident) {
-        const float rx = room_visual_profile(room).resident_clear_x;
-        mesh_.append_box({x + rx + 4.0f, y + 17.0f, -1.0f, 10.0f, 10.0f, 6.0f,
-                          rgba(245, 210, 174), assets::GeneratedMaterial::Steel});
-        mesh_.append_box({x + rx, y + 27.0f, -1.0f, 18.0f, 27.0f, 6.0f,
-                          rgba(48, 119, 164), assets::GeneratedMaterial::ControlPanel});
     }
     if (selected) append_selection(mesh_, x, y);
 }
@@ -375,7 +367,6 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                     room,
                     active,
                     active && room == state.selected_room,
-                    active && state.resident_assigned && room == state.selected_room,
                     active && room == state.selected_room ? state.stored : 0);
     }
     prop_vertex_end_ = mesh_.vertex_count();

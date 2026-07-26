@@ -43,14 +43,13 @@ constexpr std::size_t kActiveRoomBaseBoxes = 7;
 constexpr std::size_t kMaxRoomSignatureBoxes = 14;
 constexpr std::size_t kUnbuiltRoomBoxes = 8;
 constexpr std::size_t kSelectionBoxes = 8;
-constexpr std::size_t kResidentBoxes = 2;
 constexpr std::size_t kResourceFillBoxes = 1;
 constexpr std::size_t kGlowBoxesPerActiveRoom = 2;
 constexpr std::size_t kWorstCaseSceneBoxes =
     kStaticSceneBoxes +
     kRoomX.size() * (kActiveRoomBaseBoxes + kMaxRoomSignatureBoxes +
                      kGlowBoxesPerActiveRoom) +
-    kSelectionBoxes + kResidentBoxes + kResourceFillBoxes;
+    kSelectionBoxes + kResourceFillBoxes;
 constexpr std::size_t kWorstCaseSceneVertices =
     kWorstCaseSceneBoxes * kVerticesPerBox;
 constexpr std::size_t kTargetRenderPasses = 3;

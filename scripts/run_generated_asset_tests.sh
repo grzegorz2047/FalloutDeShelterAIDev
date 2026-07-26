@@ -18,6 +18,13 @@ mkdir -p "$BUILD_DIR"
   "$ROOT/source/GeneratedUiAtlas.cpp" \
   -o "$BUILD_DIR/generated_ui_atlas_tests"
 
+"$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+  -I"$ROOT/include" \
+  "$ROOT/tests/generated_dweller_atlas_tests.cpp" \
+  "$ROOT/source/GeneratedDwellerAtlas.cpp" \
+  -o "$BUILD_DIR/generated_dweller_atlas_tests"
+
 "$BUILD_DIR/generated_material_atlas_tests"
 "$BUILD_DIR/generated_ui_atlas_tests"
-echo "generated-asset-tests: material and UI atlas decode/PICA tiling passed"
+"$BUILD_DIR/generated_dweller_atlas_tests"
+echo "generated-asset-tests: material, UI and dweller atlas decode/PICA tiling passed"

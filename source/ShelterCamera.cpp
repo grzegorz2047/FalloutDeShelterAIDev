@@ -3,6 +3,20 @@
 #include <algorithm>
 
 namespace deep_shelter::render {
+namespace {
+
+float clamp_axis(float position,
+                 float world_size,
+                 float viewport_size,
+                 float zoom) noexcept {
+    const float view_size = viewport_size / zoom;
+    if (view_size >= world_size) {
+        return (world_size - view_size) * 0.5f;
+    }
+    return std::clamp(position, 0.0f, world_size - view_size);
+}
+
+}  // namespace
 
 ShelterCamera::ShelterCamera(WorldBounds world, CameraViewport viewport)
     : world_(world), viewport_(viewport) {
@@ -42,10 +56,8 @@ void ShelterCamera::clamp() noexcept {
     world_.height = std::max(0.0f, world_.height);
     viewport_.width = std::max(1.0f, viewport_.width);
     viewport_.height = std::max(1.0f, viewport_.height);
-    const float max_x = std::max(0.0f, world_.width - viewport_.width / zoom_);
-    const float max_y = std::max(0.0f, world_.height - viewport_.height / zoom_);
-    x_ = std::clamp(x_, 0.0f, max_x);
-    y_ = std::clamp(y_, 0.0f, max_y);
+    x_ = clamp_axis(x_, world_.width, viewport_.width, zoom_);
+    y_ = clamp_axis(y_, world_.height, viewport_.height, zoom_);
 }
 
 }  // namespace deep_shelter::render

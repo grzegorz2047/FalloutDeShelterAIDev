@@ -62,7 +62,8 @@ struct UiAtlasRegion {
 void decode_generated_ui_atlas(std::uint32_t* output,
                                std::size_t output_pixels) noexcept;
 
-// RGBA8 pixels in the PICA200 8x8 Morton-tiled order expected by C3D_Tex.
+// GPU_RGBA8 pixels in the PICA200 A/B/G/R byte order and 8x8 Morton tiling
+// expected by C3D_Tex.
 void decode_generated_ui_atlas_tiled(std::uint32_t* output,
                                      std::size_t output_pixels) noexcept;
 

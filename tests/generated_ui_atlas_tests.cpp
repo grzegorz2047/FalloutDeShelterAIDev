@@ -30,6 +30,14 @@ std::uint8_t alpha(std::uint32_t pixel) noexcept {
     return static_cast<std::uint8_t>(pixel >> 24u);
 }
 
+constexpr std::uint32_t pica_rgba8(std::uint32_t color) noexcept {
+    const std::uint32_t r = color & 0xffu;
+    const std::uint32_t g = (color >> 8u) & 0xffu;
+    const std::uint32_t b = (color >> 16u) & 0xffu;
+    const std::uint32_t a = (color >> 24u) & 0xffu;
+    return a | (b << 8u) | (g << 16u) | (r << 24u);
+}
+
 }  // namespace
 
 int main() {
@@ -45,9 +53,18 @@ int main() {
     for (std::size_t y = 0; y < kGeneratedUiAtlasHeight; ++y) {
         for (std::size_t x = 0; x < kGeneratedUiAtlasWidth; ++x) {
             const std::size_t source = y * kGeneratedUiAtlasWidth + x;
-            assert(linear[source] == tiled[pica_tile_offset(x, y)]);
+            assert(pica_rgba8(linear[source]) ==
+                   tiled[pica_tile_offset(x, y)]);
         }
     }
+
+    // Guard the GPU byte order. The previous row-major copy displayed the
+    // intended cream/mint palette as magenta in Azahar.
+    const auto work = ui_icon_region(UiIcon::Work);
+    const auto work_accent =
+        linear[(work.y + 7u) * kGeneratedUiAtlasWidth + work.x + 3u];
+    assert(work_accent == 0xffb8dd6au);
+    assert(pica_rgba8(work_accent) == 0x6addb8ffu);
 
     for (std::uint8_t index = 0; index < static_cast<std::uint8_t>(UiIcon::Count); ++index) {
         const auto region = ui_icon_region(static_cast<UiIcon>(index));

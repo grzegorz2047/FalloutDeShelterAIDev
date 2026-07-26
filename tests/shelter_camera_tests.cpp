@@ -33,8 +33,14 @@ int main() {
     assert(camera.y() <= 240.0f);
 
     camera.set_world({100.0f, 100.0f});
-    assert(camera.x() == 0.0f);
-    assert(camera.y() == 0.0f);
+    assert(camera.x() == -350.0f);
+    assert(camera.y() == -190.0f);
     assert(camera.visible(0.0f, 0.0f, 100.0f, 100.0f));
+
+    ShelterCamera shelter_camera({400.0f, 240.0f}, {400.0f, 240.0f});
+    shelter_camera.zoom_by(-0.5f);
+    assert(shelter_camera.x() == -200.0f);
+    assert(shelter_camera.y() == -120.0f);
+    assert(shelter_camera.visible(0.0f, 0.0f, 400.0f, 240.0f));
     return 0;
 }
