@@ -1,16 +1,30 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
 namespace deep_shelter::rooms {
 
+[[nodiscard]] constexpr std::uint32_t room_stable_key(
+    std::string_view id) noexcept {
+    std::uint32_t hash = 2166136261u;
+    for (const char character : id) {
+        hash ^= static_cast<std::uint8_t>(character);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
 struct RoomDefinition {
+    std::uint32_t stable_key = 0;
     std::string id;
     std::string category;
+    std::string display_name;
     std::string name_key;
     std::string description_key;
     std::string icon;
@@ -23,6 +37,7 @@ struct RoomDefinition {
     std::string required_achievement;
     std::string produces;
     int storage_bonus = 0;
+    bool transport = false;
 };
 
 struct UnlockContext {
@@ -45,12 +60,22 @@ public:
     [[nodiscard]] bool valid(std::string* detail = nullptr) const;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] const RoomDefinition* find(const std::string& id) const noexcept;
+    [[nodiscard]] const RoomDefinition* find(std::uint32_t stable_key) const noexcept;
     [[nodiscard]] RoomAvailability availability(const std::string& id,
-                                                const UnlockContext& context) const;
+                                                 const UnlockContext& context) const;
+    [[nodiscard]] RoomAvailability availability(std::uint32_t stable_key,
+                                                 const UnlockContext& context) const;
     [[nodiscard]] std::vector<RoomAvailability> list(const UnlockContext& context) const;
-    [[nodiscard]] const RoomDefinition& resolve_or_placeholder(const std::string& id) const noexcept;
+    [[nodiscard]] const RoomDefinition& resolve_or_placeholder(
+        const std::string& id) const noexcept;
+    [[nodiscard]] const RoomDefinition& resolve_or_placeholder(
+        std::uint32_t stable_key) const noexcept;
 
 private:
+    [[nodiscard]] RoomAvailability availability(
+        const RoomDefinition* definition,
+        const UnlockContext& context) const;
+
     std::vector<RoomDefinition> definitions_;
     RoomDefinition placeholder_;
 };
