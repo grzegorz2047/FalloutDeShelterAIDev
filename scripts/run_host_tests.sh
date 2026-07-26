@@ -6,6 +6,7 @@ PATCH="$ROOT/scripts/apply_room_lifecycle_v3_verified.py"
 STANDARD_RUNNER="/tmp/deep-shelter-standard-host-tests.sh"
 CLEAN_BASE="eaa1b18ce955ac66c97122fc1d3c5312aed4cb0d"
 
+git fetch --depth=1 origin "$CLEAN_BASE"
 git show "$CLEAN_BASE:scripts/run_host_tests.sh" > "$STANDARD_RUNNER"
 chmod +x "$STANDARD_RUNNER"
 
