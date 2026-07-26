@@ -143,25 +143,6 @@ jobs:
             fi
           done
 
-          window_id=$(xdotool search --name '^Azahar [0-9]' | tail -n 1)
-          test -n "$window_id"
-          xdotool windowfocus --sync "$window_id"
-
-          # Click the centre of the lower-screen Build control. Keyboard focus
-          # mappings vary between Azahar releases, while the fixed Xvfb/window
-          # geometry below is also the source of the deterministic screenshot
-          # crop. Repeating the touch builds all five remaining room profiles.
-          xdotool mousemove --sync 740 600
-          for room in $(seq 1 5); do
-            # Hold across several emulated frames; an instantaneous X11 click
-            # can press and release between two hidScanInput() calls.
-            xdotool mousedown 1
-            sleep 0.2
-            xdotool mouseup 1
-            sleep 0.4
-          done
-          sleep 3
-
           perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
           test -n "$perf_path"
           cp "$perf_path" azahar-performance.log
