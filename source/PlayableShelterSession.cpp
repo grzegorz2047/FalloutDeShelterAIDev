@@ -1182,12 +1182,18 @@ PlayableSaveStatus save_playable_state(
         return PlayableSaveStatus::IoError;
     }
 
-    std::remove(backup.c_str());
-    errno = 0;
-    if (std::rename(main.c_str(), backup.c_str()) != 0 &&
-        errno != ENOENT) {
+    const PlayableLoadResult current = load_one(main);
+    if (current.status == PlayableSaveStatus::Ok) {
+        std::remove(backup.c_str());
+        if (std::rename(main.c_str(), backup.c_str()) != 0) {
+            std::remove(temp.c_str());
+            return PlayableSaveStatus::IoError;
+        }
+    } else if (current.status != PlayableSaveStatus::Missing) {
         std::remove(temp.c_str());
         return PlayableSaveStatus::IoError;
+    } else {
+        std::remove(backup.c_str());
     }
     if (std::rename(temp.c_str(), main.c_str()) != 0) {
         std::rename(backup.c_str(), main.c_str());
