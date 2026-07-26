@@ -1,4 +1,0 @@
-/home/runner/work/FalloutDeShelterAIDev/FalloutDeShelterAIDev/source/PlayableShelterSession.cpp: In function ‘void deep_shelter::gameplay::{anonymous}::normalize_room_groups(deep_shelter::gameplay::PlayableShelterState&)’:
-/home/runner/work/FalloutDeShelterAIDev/FalloutDeShelterAIDev/source/PlayableShelterSession.cpp:101:37: error: ‘room_index_at_state’ was not declared in this scope
-  101 |             const int first_index = room_index_at_state(state, column, floor);
-      |                                     ^~~~~~~~~~~~~~~~~~~

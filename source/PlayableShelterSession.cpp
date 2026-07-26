@@ -73,6 +73,65 @@ bool room_produces(PlayableRoomType type) noexcept {
            type != PlayableRoomType::Elevator;
 }
 
+int room_index_at_state(const PlayableShelterState& state,
+                        int column,
+                        int floor) noexcept;
+
+constexpr int kPlayableMaximumRoomLevel = 3;
+constexpr int kPlayableMaximumGroupWidth = 3;
+
+int upgrade_cost(const PlayableRoomEntry& room, int group_width) noexcept {
+    return 75 * group_width * room.level;
+}
+
+int demolition_refund(const PlayableRoomEntry& room) noexcept {
+    return room_cost(room.type) * room.level / 2;
+}
+
+void normalize_room_groups(PlayableShelterState& state) noexcept {
+    std::uint64_t highest_id = 0;
+    for (auto& room : state.room_entries) {
+        if (!room.active) continue;
+        if (room.segment_id == 0) room.segment_id = state.next_segment_id++;
+        highest_id = std::max(highest_id, room.segment_id);
+        room.group_id = room.segment_id;
+        room.level = std::max(1, std::min(room.level, kPlayableMaximumRoomLevel));
+    }
+    state.next_segment_id = std::max(state.next_segment_id, highest_id + 1);
+
+    for (int floor = 0; floor < kPlayableGridFloors; ++floor) {
+        int column = 0;
+        while (column < kPlayableGridColumns) {
+            const int first_index = room_index_at_state(state, column, floor);
+            if (first_index < 0) {
+                ++column;
+                continue;
+            }
+            auto& first = state.room_entries[static_cast<std::size_t>(first_index)];
+            std::uint64_t stable_group = first.segment_id;
+            int width = 1;
+            while (width < kPlayableMaximumGroupWidth &&
+                   column + width < kPlayableGridColumns) {
+                const int candidate_index = room_index_at_state(
+                    state, column + width, floor);
+                if (candidate_index < 0) break;
+                const auto& candidate = state.room_entries[
+                    static_cast<std::size_t>(candidate_index)];
+                if (candidate.type != first.type || candidate.level != first.level) break;
+                stable_group = std::min(stable_group, candidate.segment_id);
+                ++width;
+            }
+            for (int offset = 0; offset < width; ++offset) {
+                const int member_index = room_index_at_state(
+                    state, column + offset, floor);
+                state.room_entries[static_cast<std::size_t>(member_index)].group_id =
+                    stable_group;
+            }
+            column += width;
+        }
+    }
+}
+
 PlayableRoomType legacy_room_type(int room) noexcept {
     switch (room) {
         case 0:
@@ -207,12 +266,14 @@ void upgrade_legacy_shape(PlayableShelterState& state) noexcept {
         resident.destination_floor = room.floor;
         resident.state = PlayableResidentState::Working;
     }
+    normalize_room_groups(state);
     sync_legacy_fields(state);
 }
 
 PlayableShelterState normalized_state(
     PlayableShelterState state) noexcept {
     upgrade_legacy_shape(state);
+    normalize_room_groups(state);
     return state;
 }
 
@@ -589,7 +650,9 @@ bool read_v2_payload(const std::vector<std::uint8_t>& body,
         }
         resident.active = active != 0;
     }
-    return offset == body.size() && valid_playable_state(state);
+    if (offset != body.size()) return false;
+    normalize_room_groups(state);
+    return valid_playable_state(state);
 }
 
 }  // namespace
@@ -807,10 +870,135 @@ BuildResult PlayableShelterSession::confirm_build() noexcept {
     room.floor = state_.build_cursor_floor;
     room.stored = 0;
     room.production_steps = 0;
+    room.segment_id = state_.next_segment_id++;
+    room.group_id = room.segment_id;
+    room.level = 1;
     state_.credits -= preview.cost;
     state_.selected_room = slot;
+    normalize_room_groups(state_);
     sync_legacy_view();
     return BuildResult::Built;
+}
+
+int PlayableShelterSession::selected_group_width() const noexcept {
+    const auto& selected = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)];
+    int width = 0;
+    for (const auto& room : state_.room_entries) {
+        if (room.active && room.group_id == selected.group_id) ++width;
+    }
+    return width;
+}
+
+PlayableRoomLifecyclePreview
+PlayableShelterSession::preview_upgrade_selected() const noexcept {
+    PlayableRoomLifecyclePreview preview;
+    const auto& selected = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)];
+    if (!selected.active) return preview;
+    preview.group_width = selected_group_width();
+    if (selected.level >= kPlayableMaximumRoomLevel) {
+        preview.result = RoomLifecycleResult::MaximumLevel;
+        return preview;
+    }
+    const int cost = upgrade_cost(selected, preview.group_width);
+    preview.credit_delta = -cost;
+    if (state_.credits < cost) {
+        preview.result = RoomLifecycleResult::NotEnoughCredits;
+        return preview;
+    }
+    for (int index = 0; index < kPlayableRoomCapacity; ++index) {
+        const auto& room = state_.room_entries[static_cast<std::size_t>(index)];
+        if (!room.active || room.group_id != selected.group_id) continue;
+        preview.stored_units_affected += room.stored;
+        preview.production_steps_affected += room.production_steps;
+        for (const auto& resident : state_.residents) {
+            if (resident.active && resident.assigned_room == index) {
+                ++preview.residents_affected;
+            }
+        }
+    }
+    preview.result = RoomLifecycleResult::Applied;
+    return preview;
+}
+
+RoomLifecycleResult
+PlayableShelterSession::confirm_upgrade_selected() noexcept {
+    const auto preview = preview_upgrade_selected();
+    if (!preview.allowed()) return preview.result;
+    const std::uint64_t group_id = state_.room_entries[
+        static_cast<std::size_t>(state_.selected_room)].group_id;
+    state_.credits += preview.credit_delta;
+    for (auto& room : state_.room_entries) {
+        if (room.active && room.group_id == group_id) ++room.level;
+    }
+    normalize_room_groups(state_);
+    sync_legacy_view();
+    return RoomLifecycleResult::Applied;
+}
+
+PlayableRoomLifecyclePreview
+PlayableShelterSession::preview_demolish_selected() const noexcept {
+    PlayableRoomLifecyclePreview preview;
+    const int selected_index = state_.selected_room;
+    const auto& selected = state_.room_entries[
+        static_cast<std::size_t>(selected_index)];
+    if (!selected.active) return preview;
+    preview.group_width = selected_group_width();
+    preview.credit_delta = demolition_refund(selected);
+    preview.stored_units_affected = selected.stored;
+    preview.production_steps_affected = selected.production_steps;
+    for (const auto& resident : state_.residents) {
+        if (resident.active && resident.assigned_room == selected_index) {
+            ++preview.residents_affected;
+        }
+    }
+    if (state_.rooms <= 1) {
+        preview.result = RoomLifecycleResult::LastRoom;
+    } else if (preview.residents_affected > 0) {
+        preview.result = RoomLifecycleResult::UnsafeResidents;
+    } else if (preview.stored_units_affected > 0) {
+        preview.result = RoomLifecycleResult::UnsafeStoredResources;
+    } else if (preview.production_steps_affected > 0) {
+        preview.result = RoomLifecycleResult::UnsafeProduction;
+    } else {
+        preview.result = RoomLifecycleResult::Applied;
+    }
+    return preview;
+}
+
+RoomLifecycleResult
+PlayableShelterSession::confirm_demolish_selected() noexcept {
+    const auto preview = preview_demolish_selected();
+    if (!preview.allowed()) return preview.result;
+    const int removed = state_.selected_room;
+    state_.credits += preview.credit_delta;
+    state_.room_entries[static_cast<std::size_t>(removed)] = {};
+    for (auto& resident : state_.residents) {
+        if (resident.assigned_room == removed) {
+            resident.assigned_room = -1;
+            resident.state = PlayableResidentState::Roaming;
+        }
+    }
+    normalize_room_groups(state_);
+    int replacement = -1;
+    for (int index = removed - 1; index >= 0; --index) {
+        if (state_.room_entries[static_cast<std::size_t>(index)].active) {
+            replacement = index;
+            break;
+        }
+    }
+    if (replacement < 0) {
+        for (int index = removed + 1; index < kPlayableRoomCapacity; ++index) {
+            if (state_.room_entries[static_cast<std::size_t>(index)].active) {
+                replacement = index;
+                break;
+            }
+        }
+    }
+    state_.selected_room = replacement;
+    sync_legacy_view();
+    return RoomLifecycleResult::Applied;
 }
 
 int PlayableShelterSession::room_index_at(
