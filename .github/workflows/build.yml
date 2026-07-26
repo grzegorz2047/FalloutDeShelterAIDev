@@ -143,10 +143,14 @@ jobs:
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
 
-          # Hidden benchmark chord: L+R+SELECT enables a full stereo slider value.
+          # Hidden benchmark chord: L+R+A enables a full stereo slider value.
+          # A is the confirmed Z key mapping already used by room-building smoke.
           xdotool keydown q
           xdotool keydown w
-          xdotool key n
+          sleep 0.5
+          xdotool keydown z
+          sleep 0.5
+          xdotool keyup z
           xdotool keyup w
           xdotool keyup q
           sleep 4
