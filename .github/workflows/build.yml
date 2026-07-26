@@ -46,9 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DeepShelter3D-build-log
-          path: |
-            build.log
-            source/main.cpp
+          path: build.log
           if-no-files-found: warn
       - name: Upload playable artifacts
         uses: actions/upload-artifact@v4
