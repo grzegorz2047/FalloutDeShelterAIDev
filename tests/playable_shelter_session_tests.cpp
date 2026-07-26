@@ -311,7 +311,7 @@ void playable_room_groups_upgrade_and_demolish_are_atomic() {
     assert(valid_playable_state(blocked.state()));
 }
 
-void v1_migrates_to_v2_and_atomic_backup_recovers() {
+void legacy_saves_migrate_to_v3_and_atomic_backup_recovers() {
     const auto migrated = decode_playable_state(make_v1_save());
     assert(migrated.status == PlayableSaveStatus::Ok);
     assert(migrated.migrated_from_v1);
@@ -323,11 +323,28 @@ void v1_migrates_to_v2_and_atomic_backup_recovers() {
     assert(migrated.state.residents[0].state ==
            PlayableResidentState::Working);
     assert(migrated.state.residents[0].assigned_room == 1);
-    const auto encoded_v2 = encode_playable_state(migrated.state);
-    assert(encoded_v2.size() > make_v1_save().size());
-    assert(encoded_v2[4] == 2u && encoded_v2[5] == 0u);
+    const auto encoded_v3 = encode_playable_state(migrated.state);
+    assert(encoded_v3.size() > make_v1_save().size());
+    assert(encoded_v3[4] == 3u && encoded_v3[5] == 0u);
 
-    auto corrupt = encoded_v2;
+    PlayableShelterSession upgraded(migrated.state);
+    assert(upgraded.preview_upgrade_selected().allowed());
+    assert(upgraded.confirm_upgrade_selected() == RoomLifecycleResult::Applied);
+    const auto upgraded_bytes = encode_playable_state(upgraded.state());
+    const auto upgraded_roundtrip = decode_playable_state(upgraded_bytes);
+    assert(upgraded_roundtrip.status == PlayableSaveStatus::Ok);
+    assert(!upgraded_roundtrip.migrated_from_v1);
+    assert(!upgraded_roundtrip.migrated_from_v2);
+    assert(upgraded_roundtrip.state.next_segment_id == upgraded.state().next_segment_id);
+    for (std::size_t index = 0; index < upgraded.state().room_entries.size(); ++index) {
+        const auto& before = upgraded.state().room_entries[index];
+        const auto& after = upgraded_roundtrip.state.room_entries[index];
+        assert(after.segment_id == before.segment_id);
+        assert(after.group_id == before.group_id);
+        assert(after.level == before.level);
+    }
+
+    auto corrupt = encoded_v3;
     corrupt.back() ^= 0x7fu;
     assert(decode_playable_state(corrupt).status ==
            PlayableSaveStatus::Corrupt);
@@ -387,6 +404,6 @@ int main() {
     transit_is_deterministic_and_production_starts_on_arrival();
     changing_floors_requires_a_connected_elevator_shaft();
     playable_room_groups_upgrade_and_demolish_are_atomic();
-    v1_migrates_to_v2_and_atomic_backup_recovers();
+    legacy_saves_migrate_to_v3_and_atomic_backup_recovers();
     return 0;
 }
