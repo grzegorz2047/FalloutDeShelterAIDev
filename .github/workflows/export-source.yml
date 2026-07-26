@@ -1,0 +1,23 @@
+name: Export branch source
+
+on:
+  push:
+    branches:
+      - agent/fix-first-save-rotation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive checkout
+        run: git archive --format=zip --output=FalloutDeShelterAIDev-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FalloutDeShelterAIDev-source
+          path: FalloutDeShelterAIDev-source.zip
+          if-no-files-found: error
