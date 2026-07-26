@@ -27,6 +27,7 @@ public:
 
     void pan(float dx, float dy) noexcept;
     void zoom_by(float delta) noexcept;
+    void center_on(float world_x, float world_y) noexcept;
     void set_world(WorldBounds world) noexcept;
 
     [[nodiscard]] float x() const noexcept;
