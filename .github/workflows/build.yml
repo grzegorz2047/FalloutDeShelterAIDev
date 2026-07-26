@@ -83,13 +83,16 @@ jobs:
           chmod +x azahar.AppImage
           ./azahar.AppImage --appimage-extract > azahar-extract.log 2>&1
           test -x squashfs-root/AppRun
-      - name: Install CIA
+      - name: Install CIA and prepare benchmark marker
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p azahar-home
           HOME="$PWD/azahar-home" timeout 90s xvfb-run -a ./squashfs-root/AppRun --install "$PWD/dist/DeepShelter3D.cia" 2>&1 | tee azahar-cia-install.log
           grep -q "Installed CIA successfully" azahar-cia-install.log
+          sdmc_path=$(find azahar-home -type d -iname 'sdmc' -print -quit)
+          test -n "$sdmc_path"
+          touch "$sdmc_path/DeepShelter3D_benchmark.flag"
       - name: Launch 3DSX and verify lighting metrics
         shell: bash
         timeout-minutes: 2
@@ -128,12 +131,13 @@ jobs:
           HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
           azahar_pid=$!
 
-          # The initial window collects well over 120 frames in normal mono mode.
+          # The one-shot SD marker records one mono bucket, then automatically
+          # forces the physical slider value to full stereo for later buckets.
           for second in $(seq 1 18); do
             sleep 1
             if ! kill -0 "$azahar_pid" 2>/dev/null; then
               wait "$azahar_pid" || true
-              echo "Azahar exited before producing a stable frame." >&2
+              echo "Azahar exited before producing stable mono/stereo metrics." >&2
               cat azahar-3dsx-launch.log >&2
               exit 1
             fi
@@ -142,18 +146,6 @@ jobs:
           window_id=$(xdotool search --name '^Azahar [0-9]' | tail -n 1)
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
-
-          # Hidden benchmark chord: L+R+A enables a full stereo slider value.
-          # A is the confirmed Z key mapping already used by room-building smoke.
-          xdotool keydown q
-          xdotool keydown w
-          sleep 0.5
-          xdotool keydown z
-          sleep 0.5
-          xdotool keyup z
-          xdotool keyup w
-          xdotool keyup q
-          sleep 4
 
           # Keep the existing deterministic six-room presentation state.
           for room in $(seq 1 5); do
