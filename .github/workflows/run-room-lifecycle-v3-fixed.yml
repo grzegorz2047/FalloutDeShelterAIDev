@@ -33,8 +33,8 @@ jobs:
           match = re.search(r"source\s*=\s*Path\('source/PlayableShelterSession\.cpp'\)", script)
           if match is None:
               raise SystemExit('source patch start missing')
-          script = 'from pathlib import Path\n' + script[match.start():]
-          Path('/tmp/apply_room_lifecycle_v3.py').write_text(script)
+          prefix = "from pathlib import Path\n\ndef replace_once(text, old, new, label):\n    if old not in text:\n        raise SystemExit(f'{label} anchor missing')\n    return text.replace(old, new, 1)\n\n"
+          Path('/tmp/apply_room_lifecycle_v3.py').write_text(prefix + script[match.start():])
           PY
           extract_status=$?
           if [ "$extract_status" -eq 0 ]; then
