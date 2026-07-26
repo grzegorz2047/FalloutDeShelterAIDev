@@ -147,7 +147,10 @@ jobs:
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
 
-          # Keep the existing deterministic six-room presentation state.
+          # Focus the secondary Build button, then create all five remaining
+          # rooms so the visual artifact covers every furnished room profile.
+          xdotool key Down
+          sleep 0.5
           for room in $(seq 1 5); do
             xdotool key z
             sleep 0.5

@@ -248,15 +248,18 @@ void Scene3DRenderer::build_scene(const ShelterCamera& camera,
                                   const ShelterSceneState3D& state,
                                   RenderStats& stats) noexcept {
     mesh_.clear();
-    mesh_.append_box({4.0f, 10.0f, -34.0f, 392.0f, 220.0f, 8.0f,
+    // The continuous rock mass must remain behind the deepest room rear wall
+    // (z=-56). Keeping it near the old -26 front plane hid supplied wall
+    // textures, ceiling lights and rear equipment despite correct local depth.
+    mesh_.append_box({4.0f, 10.0f, -90.0f, 392.0f, 220.0f, 8.0f,
                       rgba(12, 13, 14), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({0.0f, 5.0f, -29.0f, 32.0f, 225.0f, 18.0f,
+    mesh_.append_box({0.0f, 5.0f, -82.0f, 32.0f, 225.0f, 18.0f,
                       rgba(47, 39, 34), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({368.0f, 5.0f, -29.0f, 32.0f, 225.0f, 18.0f,
+    mesh_.append_box({368.0f, 5.0f, -82.0f, 32.0f, 225.0f, 18.0f,
                       rgba(47, 39, 34), assets::GeneratedMaterial::Rock});
-    mesh_.append_box({18.0f, 8.0f, -29.0f, 364.0f, 17.0f, 18.0f,
+    mesh_.append_box({18.0f, 8.0f, -82.0f, 364.0f, 17.0f, 18.0f,
                       rgba(60, 46, 38), assets::GeneratedMaterial::ExcavatedRock});
-    mesh_.append_box({18.0f, 220.0f, -29.0f, 364.0f, 18.0f, 18.0f,
+    mesh_.append_box({18.0f, 220.0f, -82.0f, 364.0f, 18.0f, 18.0f,
                       rgba(60, 46, 38), assets::GeneratedMaterial::ExcavatedRock});
     for (int floor = 0; floor < 3; ++floor) {
         const float fy = layout::kRoomY[floor * 2] + layout::kRoomHeight;
