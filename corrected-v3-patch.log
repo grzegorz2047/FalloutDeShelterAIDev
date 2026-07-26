@@ -1,1 +1,5 @@
-V2 migration flag anchor missing
+Traceback (most recent call last):
+  File "/tmp/apply_room_lifecycle_v3.py", line 1, in <module>
+    source = Path('source/PlayableShelterSession.cpp')
+             ^^^^
+NameError: name 'Path' is not defined
