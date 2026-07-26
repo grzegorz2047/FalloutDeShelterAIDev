@@ -61,6 +61,8 @@ struct PlayableRoomLifecyclePreview {
     }
 };
 
+// Runtime behavior profile. Persistent room identity is stored separately in
+// catalog_key so adding or reordering data-driven definitions remains safe.
 enum class PlayableRoomType {
     Power,
     Food,
@@ -103,6 +105,9 @@ struct PlayableRoomEntry {
     std::uint64_t segment_id = 0;
     std::uint64_t group_id = 0;
     int level = 1;
+    // Stable RoomCatalog key persisted by save V4. Placed in the structure's
+    // existing trailing alignment slot so ARM builds do not grow every room.
+    std::uint32_t catalog_key = 0;
 };
 
 struct PlayableResidentEntry {
@@ -142,6 +147,8 @@ struct PlayableShelterState {
     std::array<int, kPlayableMaxRooms> stored{};
     std::array<int, kPlayableMaxRooms> production_steps{};
     PlayableRoomType selected_build_type = PlayableRoomType::Power;
+    // Stable identity selected by the builder; the type remains its behavior.
+    std::uint32_t selected_build_key = 0;
     int build_cursor_column = 1;
     int build_cursor_floor = 0;
     std::array<PlayableRoomEntry, kPlayableRoomCapacity> room_entries{};
@@ -214,6 +221,7 @@ struct PlayableLoadResult {
     bool used_backup = false;
     bool migrated_from_v1 = false;
     bool migrated_from_v2 = false;
+    bool migrated_from_v3 = false;
 };
 
 [[nodiscard]] bool valid_playable_state(

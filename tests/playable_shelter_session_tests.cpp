@@ -369,7 +369,7 @@ void legacy_saves_migrate_to_v3_and_atomic_backup_recovers() {
     assert(migrated.state.residents[0].assigned_room == 1);
     const auto encoded_v3 = encode_playable_state(migrated.state);
     assert(encoded_v3.size() > make_v1_save().size());
-    assert(encoded_v3[4] == 3u && encoded_v3[5] == 0u);
+    assert(encoded_v3[4] == 4u && encoded_v3[5] == 0u);
 
     PlayableShelterSession upgraded(migrated.state);
     assert(upgraded.preview_upgrade_selected().allowed());
@@ -379,14 +379,36 @@ void legacy_saves_migrate_to_v3_and_atomic_backup_recovers() {
     assert(upgraded_roundtrip.status == PlayableSaveStatus::Ok);
     assert(!upgraded_roundtrip.migrated_from_v1);
     assert(!upgraded_roundtrip.migrated_from_v2);
+    assert(!upgraded_roundtrip.migrated_from_v3);
     assert(upgraded_roundtrip.state.next_segment_id == upgraded.state().next_segment_id);
+    assert(upgraded_roundtrip.state.selected_build_key != 0);
     for (std::size_t index = 0; index < upgraded.state().room_entries.size(); ++index) {
         const auto& before = upgraded.state().room_entries[index];
         const auto& after = upgraded_roundtrip.state.room_entries[index];
         assert(after.segment_id == before.segment_id);
         assert(after.group_id == before.group_id);
+        assert(after.catalog_key == before.catalog_key);
         assert(after.level == before.level);
     }
+
+    PlayableShelterState retired_state = upgraded.state();
+    retired_state.room_entries[1].catalog_key = 0xdeadbeefu;
+    const auto retired_bytes = encode_playable_state(retired_state);
+    assert(!retired_bytes.empty());
+    const auto retired_roundtrip = decode_playable_state(retired_bytes);
+    assert(retired_roundtrip.status == PlayableSaveStatus::Ok);
+    assert(retired_roundtrip.state.room_entries[1].catalog_key == 0xdeadbeefu);
+
+    PlayableShelterState split_identity = upgraded.state();
+    split_identity.room_entries[0].type = PlayableRoomType::Workshop;
+    split_identity.room_entries[1].type = PlayableRoomType::Workshop;
+    split_identity.room_entries[0].catalog_key = 0x11111111u;
+    split_identity.room_entries[1].catalog_key = 0x22222222u;
+    split_identity.room_entries[0].column = 0;
+    split_identity.room_entries[1].column = 1;
+    PlayableShelterSession split_session(split_identity);
+    assert(split_session.state().room_entries[0].group_id !=
+           split_session.state().room_entries[1].group_id);
 
     auto corrupt = encoded_v3;
     corrupt.back() ^= 0x7fu;
