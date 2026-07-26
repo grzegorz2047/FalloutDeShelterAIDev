@@ -169,11 +169,23 @@ jobs:
             exit 1
           fi
 
+          # Keep the complete desktop capture for diagnostics, but also publish
+          # enlarged per-screen crops. The fixed Xvfb geometry gives the emulator
+          # a stable central 400x240 top screen and 320x240 bottom screen.
           timeout 10s import -display "$DISPLAY" -window root azahar-first-frame.png
           test -s azahar-first-frame.png
-          colors=$(timeout 10s identify -format '%k' azahar-first-frame.png)
-          echo "Captured six-room stereo presentation frame with $colors colors"
-          test "$colors" -gt 16
+          convert azahar-first-frame.png -crop 420x250+430+185 +repage \
+            -filter point -resize 1260x750 azahar-top-screen-3x.png
+          convert azahar-first-frame.png -crop 340x250+470+410 +repage \
+            -filter point -resize 1020x750 azahar-bottom-screen-3x.png
+          test "$(identify -format '%wx%h' azahar-top-screen-3x.png)" = "1260x750"
+          test "$(identify -format '%wx%h' azahar-bottom-screen-3x.png)" = "1020x750"
+          top_colors=$(identify -format '%k' azahar-top-screen-3x.png)
+          bottom_colors=$(identify -format '%k' azahar-bottom-screen-3x.png)
+          echo "Captured readable top screen with $top_colors colors"
+          echo "Captured readable bottom screen with $bottom_colors colors"
+          test "$top_colors" -gt 16
+          test "$bottom_colors" -gt 16
 
           if grep -Eq "could not connect to display|X11 connection broke|terminate called|Fatal|Unhandled exception" azahar-3dsx-launch.log; then
             cat azahar-3dsx-launch.log >&2
@@ -187,14 +199,14 @@ jobs:
             fi
             sleep 0.25
           done
-      - name: Upload Azahar logs and first frame
+      - name: Upload Azahar logs and readable frames
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DeepShelter3D-Azahar-logs
           path: |
             azahar-*.log
-            azahar-first-frame.png
+            azahar-*.png
           if-no-files-found: warn
 
   publish-release:
