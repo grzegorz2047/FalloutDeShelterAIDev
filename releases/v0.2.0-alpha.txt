@@ -1,0 +1,42 @@
+# Deep Shelter 3D v0.2.0-alpha
+
+Pierwsza grywalna wersja alpha zarządzania schronem na Nintendo 3DS.
+
+## Najważniejsze zmiany
+
+- swobodne budowanie na siatce 8 × 6 zamiast sześciu z góry ustalonych makiet;
+- wybór typu pomieszczenia, komórki, podgląd kosztu oraz czytelny powód blokady;
+- nieregularny, wielopiętrowy schron z ciągłymi szybami wind;
+- mieszkańcy mają własne pozycje, deterministycznie spacerują i dochodzą do miejsca pracy bez teleportacji;
+- grywalna pętla: budowa, przypisanie, produkcja, odbiór zasobów, ulepszanie i wyburzanie;
+- bezpieczne blokowanie wyburzenia odcinającego część schronu;
+- 22 definicje pomieszczeń w data-driven katalogu, stabilne klucze i reguły odblokowań;
+- zapis V4 z CRC, backupem, migracją V1/V2/V3 oraz zachowaniem nieznanych typów pokojów;
+- zapis i wznowienie gry także podczas ruchu mieszkańca;
+- prawdziwa geometria Citro3D, stereoskopowe 3D, umeblowane przekroje pokoi i assety projektu;
+- dolny ekran z obsługą dotyku, D-pada i przycisków;
+- automatyczne testy hostowe, build CIA/3DSX oraz dwufazowy smoke test w Azaharze.
+
+## Pliki
+
+- `DeepShelter3D.cia` — wersja instalacyjna;
+- `DeepShelter3D.3dsx` — wersja dla Homebrew Launcher;
+- `SHA256SUMS.txt` — sumy kontrolne;
+- `INSTALLATION.md` — instrukcja instalacji.
+
+## Sterowanie w aktualnym vertical slice
+
+- Circle Pad — przesuwanie kamery;
+- L/R — zoom albo zmiana typu pokoju w trybie budowy;
+- D-pad — wybór pokoju lub komórki budowy;
+- A — zatwierdzenie;
+- B — anulowanie / wyburzenie zgodnie z kontekstem;
+- X/Y — akcje pokoju i mieszkańca;
+- SELECT — zapis;
+- START — wyjście.
+
+## Znane ograniczenia
+
+To nadal wersja alpha, a nie kompletna gra 1.0. Katalog zawiera pełną macierz definicji, lecz grywalny selektor nie udostępnia jeszcze wszystkich 22 typów i pełnych reguł odblokowań. Model ekonomii, mieszkańców i pracy istnieje w rdzeniu, ale nie wszystkie systemy są jeszcze połączone z głównym runtime. Brakuje między innymi pełnego ekwipunku, craftingu, relacji, incydentów, walki, eksploracji, misji, lokalizacji oraz testów wydajności na fizycznym Old/New 3DS.
+
+Wydanie jest przeznaczone do testów funkcjonalnych i wizualnych. Zgłoszenia powinny wskazywać model konsoli, format (`CIA`/`3DSX`), kroki reprodukcji oraz — jeśli to możliwe — zrzut ekranu lub crash dump.
