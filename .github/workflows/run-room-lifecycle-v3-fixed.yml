@@ -33,7 +33,19 @@ jobs:
           match = re.search(r"source\s*=\s*Path\('source/PlayableShelterSession\.cpp'\)", script)
           if match is None:
               raise SystemExit('source patch start missing')
-          prefix = "from pathlib import Path\n\ndef replace_once(text, old, new, label):\n    if old not in text:\n        raise SystemExit(f'{label} anchor missing')\n    return text.replace(old, new, 1)\n\n"
+          prefix = '''from pathlib import Path
+
+def replace_once(text, old, new, label):
+    if old not in text:
+        if label == 'V2 migration flag':
+            actual = "    result.migrated_from_v1 =\n        version == kPlayableSaveVersionV1;\n    return result;\n"
+            if actual not in text:
+                raise SystemExit('V2 migration flag exact fallback missing')
+            return text.replace(actual, new, 1)
+        raise SystemExit(f'{label} anchor missing')
+    return text.replace(old, new, 1)
+
+'''
           Path('/tmp/apply_room_lifecycle_v3.py').write_text(prefix + script[match.start():])
           PY
           extract_status=$?
