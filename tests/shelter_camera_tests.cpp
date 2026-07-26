@@ -10,7 +10,15 @@ int main() {
     assert(camera.y() == 0.0f);
     assert(camera.zoom() == 1.0f);
 
-    camera.pan(5000.0f, 5000.0f);
+    camera.center_on(600.0f, 360.0f);
+    assert(camera.x() == 400.0f);
+    assert(camera.y() == 240.0f);
+
+    camera.center_on(-100.0f, -100.0f);
+    assert(camera.x() == 0.0f);
+    assert(camera.y() == 0.0f);
+
+    camera.center_on(5000.0f, 5000.0f);
     assert(camera.x() == 800.0f);
     assert(camera.y() == 480.0f);
 
@@ -20,6 +28,9 @@ int main() {
 
     camera.zoom_by(10.0f);
     assert(camera.zoom() == 2.5f);
+    camera.center_on(600.0f, 360.0f);
+    assert(camera.x() == 520.0f);
+    assert(camera.y() == 312.0f);
     camera.pan(5000.0f, 5000.0f);
     assert(camera.x() == 1040.0f);
     assert(camera.y() == 624.0f);
@@ -33,6 +44,9 @@ int main() {
     assert(camera.y() <= 240.0f);
 
     camera.set_world({100.0f, 100.0f});
+    assert(camera.x() == -350.0f);
+    assert(camera.y() == -190.0f);
+    camera.center_on(50.0f, 50.0f);
     assert(camera.x() == -350.0f);
     assert(camera.y() == -190.0f);
     assert(camera.visible(0.0f, 0.0f, 100.0f, 100.0f));
