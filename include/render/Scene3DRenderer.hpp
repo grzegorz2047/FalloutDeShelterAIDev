@@ -226,11 +226,11 @@ inline void frame_end(u8 flags) noexcept {
 inline u32 keys_down() noexcept {
     u32 down = hidKeysDown();
     const u32 held = hidKeysHeld();
-    if ((down & KEY_SELECT) != 0 &&
+    if ((down & KEY_A) != 0 &&
         (held & KEY_L) != 0 &&
         (held & KEY_R) != 0) {
         state().benchmark_stereo = !state().benchmark_stereo;
-        down &= ~KEY_SELECT;
+        down &= ~KEY_A;
     }
     return down;
 }
