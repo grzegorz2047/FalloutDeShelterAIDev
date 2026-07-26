@@ -8,6 +8,8 @@ CLEAN_BASE="eaa1b18ce955ac66c97122fc1d3c5312aed4cb0d"
 VERIFY_BRANCH="agent/room-lifecycle-v3-verified"
 LOG="$ROOT/build.log"
 
+git config --global --add safe.directory "$ROOT"
+
 set +e
 {
   git fetch --depth=1 origin "$CLEAN_BASE"
