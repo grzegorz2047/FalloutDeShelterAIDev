@@ -39,15 +39,26 @@ jobs:
               raise SystemExit('migration replacement literal missing')
           Path('/tmp/apply_room_lifecycle_v3.py').write_text(script.replace(old, new, 1))
           PY
-          python3 /tmp/apply_room_lifecycle_v3.py
+          set +e
+          python3 /tmp/apply_room_lifecycle_v3.py > corrected-v3-patch.log 2>&1
+          status=$?
+          cat corrected-v3-patch.log
+          if [ "$status" -ne 0 ]; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add corrected-v3-patch.log
+            git commit -m "Capture corrected V3 patch failure"
+            git push origin HEAD:agent/playable-room-lifecycle
+            exit "$status"
+          fi
       - name: Run host tests
         run: bash scripts/run_host_tests.sh
       - name: Commit tested V3 persistence
         shell: bash
         run: |
-          rm -f room-lifecycle-v3-patch.log
+          rm -f room-lifecycle-v3-patch.log corrected-v3-patch.log
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp room-lifecycle-v3-patch.log
+          git add include/gameplay/PlayableShelterSession.hpp source/PlayableShelterSession.cpp tests/playable_shelter_session_tests.cpp room-lifecycle-v3-patch.log corrected-v3-patch.log
           git commit -m "Persist playable room lifecycle in save V3"
           git push origin HEAD:agent/playable-room-lifecycle
