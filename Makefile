@@ -77,7 +77,8 @@ test:
 	@$(PYTHON) scripts/check_asset_policy.py
 	@$(PYTHON) scripts/validate_content.py
 	@$(PYTHON) tests/content_validator_tests.py
-	@$(PYTHON) -m py_compile scripts/check_asset_policy.py scripts/generate_release_assets.py scripts/validate_content.py tests/content_validator_tests.py
+	@$(PYTHON) tests/room_asset_atlas_tests.py
+	@$(PYTHON) -m py_compile scripts/check_asset_policy.py scripts/generate_release_assets.py scripts/generate_room_asset_atlas.py scripts/validate_content.py tests/content_validator_tests.py tests/room_asset_atlas_tests.py
 	@bash scripts/run_generated_asset_tests.sh
 
 3dsx: tools assets $(BUILD)

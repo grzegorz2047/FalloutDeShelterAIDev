@@ -17,8 +17,8 @@ constexpr std::size_t kGeneratedMaterialPackedBytes =
 constexpr std::size_t kGeneratedMaterialRuntimeBytes =
     kGeneratedMaterialPixelCount * sizeof(std::uint16_t);
 
-// Compact 16x16 materials derived from the reference pack attached to issue #85.
-// The production build generates only this atlas and never loads loose PNGs.
+// Semantic room-material identifiers. The procedural decoder remains as a
+// lightweight host-test fallback; production maps these IDs into RoomAssetAtlas.
 enum class GeneratedMaterial : std::uint8_t {
     Rock = 0,
     ExcavatedRock = 1,

@@ -7,6 +7,7 @@
 
 using deep_shelter::assets::GeneratedMaterial;
 using deep_shelter::render::Box3D;
+using deep_shelter::render::Billboard3D;
 using deep_shelter::render::SceneMesh3D;
 using deep_shelter::render::Vertex3D;
 
@@ -31,6 +32,7 @@ int main() {
     assert(mesh.append_box(Box3D{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
     assert(mesh.vertex_count() == 36);
     assert(mesh.box_count() == 1);
+    assert(mesh.billboard_count() == 0);
     assert(!mesh.overflowed());
 
     constexpr std::array<Normal, 6> expected{{
@@ -49,16 +51,24 @@ int main() {
     assert(mesh.append_box(Box3D{0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
                                  0xffffffffu, GeneratedMaterial::ControlPanel}));
     vertices = mesh.data();
-    constexpr float tile_width = 1.0f / 8.0f;
-    constexpr float inset = 0.0045f;
-    assert(near(vertices[0].u, 7.0f * tile_width + inset));
-    assert(near(vertices[1].u, 8.0f * tile_width - inset));
-    assert(vertices[0].u > 7.0f * tile_width);
-    assert(vertices[1].u < 8.0f * tile_width);
+    constexpr float atlas_width = 512.0f;
+    constexpr float tile_size = 64.0f;
+    assert(near(vertices[0].u, (7.0f * tile_size + 0.5f) / atlas_width));
+    assert(near(vertices[1].u, (8.0f * tile_size - 0.5f) / atlas_width));
+    assert(near(vertices[0].v, 1.0f - 0.5f / 256.0f));
+    assert(near(vertices[2].v, 1.0f - 63.5f / 256.0f));
+
+    assert(mesh.append_billboard(Billboard3D{
+        3.0f, 4.0f, 5.0f, 20.0f, 10.0f, 0xffffffffu,
+        deep_shelter::assets::room_prop_region(
+            deep_shelter::assets::RoomProp::StorageCrate)}));
+    assert(mesh.vertex_count() == 42);
+    assert(mesh.billboard_count() == 1);
 
     mesh.clear();
     assert(mesh.vertex_count() == 0);
     assert(mesh.box_count() == 0);
+    assert(mesh.billboard_count() == 0);
     assert(!mesh.append_box(Box3D{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}));
     assert(mesh.vertex_count() == 0);
     return 0;

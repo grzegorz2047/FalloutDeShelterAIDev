@@ -20,6 +20,16 @@ constexpr std::uint32_t rgba(std::uint8_t r,
            (static_cast<std::uint32_t>(a) << 24u);
 }
 
+constexpr std::uint32_t pica_rgba8(std::uint32_t color) noexcept {
+    const std::uint32_t r = color & 0xffu;
+    const std::uint32_t g = (color >> 8u) & 0xffu;
+    const std::uint32_t b = (color >> 16u) & 0xffu;
+    const std::uint32_t a = (color >> 24u) & 0xffu;
+    // tex3ds writes GPU_RGBA8 pixels as A, B, G, R bytes. On little-endian
+    // ARM this is the integer below, not C2D_Color32's host-friendly packing.
+    return a | (b << 8u) | (g << 16u) | (r << 24u);
+}
+
 constexpr std::size_t pica_tile_offset(std::size_t x, std::size_t y) noexcept {
     const std::size_t tile_x = x / 8u;
     const std::size_t tile_y = y / 8u;
@@ -192,7 +202,8 @@ void decode_generated_ui_atlas_tiled(std::uint32_t* output,
     for (std::size_t y = 0; y < kGeneratedUiAtlasHeight; ++y) {
         for (std::size_t x = 0; x < kGeneratedUiAtlasWidth; ++x) {
             output[pica_tile_offset(x, y)] =
-                ui_atlas_scratch[y * kGeneratedUiAtlasWidth + x];
+                pica_rgba8(
+                    ui_atlas_scratch[y * kGeneratedUiAtlasWidth + x]);
         }
     }
 }

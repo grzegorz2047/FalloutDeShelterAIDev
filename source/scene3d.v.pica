@@ -58,7 +58,7 @@
     add r2.x, r4.z, r7.x
     add r2.x, r2.x, r7.y
 
-    ; Generated material atlas coordinates and cel-lit vertex tint. A restrained
+    ; Room asset atlas coordinates and cel-lit vertex tint. A restrained
     ; display lift preserves dark-room readability without washing out the bands.
     mov outtc0, intex
     mul r6.xyz, inclr, r2.x

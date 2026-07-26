@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "assets" / "manifest.csv"
-ASSET_ROOTS = (ROOT / "assets", ROOT / "romfs")
+ASSET_ROOTS = (ROOT / "assets", ROOT / "data", ROOT / "romfs")
 IGNORED_NAMES = {"manifest.csv", "ATTRIBUTION.md", ".gitkeep"}
 DENIED_TERMS = {
     "fallout",

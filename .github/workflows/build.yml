@@ -143,17 +143,6 @@ jobs:
             fi
           done
 
-          window_id=$(xdotool search --name '^Azahar [0-9]' | tail -n 1)
-          test -n "$window_id"
-          xdotool windowfocus --sync "$window_id"
-
-          # Keep the existing deterministic six-room presentation state.
-          for room in $(seq 1 5); do
-            xdotool key z
-            sleep 0.5
-          done
-          sleep 3
-
           perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
           test -n "$perf_path"
           cp "$perf_path" azahar-performance.log

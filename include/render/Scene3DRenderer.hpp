@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 
 #include <3ds.h>
@@ -47,7 +48,8 @@ struct ShelterSceneState3D {
     int rooms = 1;
     int selected_room = 0;
     int stored = 0;
-    bool resident_assigned = false;
+    int resident_room = -1;
+    std::uint32_t animation_tick = 0;
 };
 
 class Scene3DRenderer {
@@ -71,13 +73,6 @@ private:
     void build_scene(const ShelterCamera& camera,
                      const ShelterSceneState3D& state,
                      RenderStats& stats) noexcept;
-    void append_room(float x,
-                     float y,
-                     int room_index,
-                     bool active,
-                     bool selected,
-                     bool resident,
-                     int stored) noexcept;
 
     SceneMesh3D mesh_{};
     shaderProgram_s program_{};
@@ -139,6 +134,11 @@ inline void initialize_log() noexcept {
         std::remove(kBenchmarkFlagPath);
     }
     value.log_initialized = true;
+}
+
+[[nodiscard]] inline bool benchmark_sequence_enabled() noexcept {
+    initialize_log();
+    return state().benchmark_sequence;
 }
 
 inline void emit_bucket(const char* mode, FrameBucket& bucket) noexcept {

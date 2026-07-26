@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "assets/GeneratedMaterialAtlas.hpp"
+#include "assets/RoomAssetAtlas.hpp"
 
 namespace deep_shelter::render {
 
@@ -34,6 +35,16 @@ struct Box3D {
     assets::GeneratedMaterial material = assets::GeneratedMaterial::Steel;
 };
 
+struct Billboard3D {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    std::uint32_t color = 0xffffffffu;
+    assets::RoomAtlasRegion region{};
+};
+
 struct FixedSideCamera {
     float center_x = 0.0f;
     float center_y = 0.0f;
@@ -52,16 +63,21 @@ public:
 
     void clear() noexcept;
     bool append_box(const Box3D& box) noexcept;
+    bool append_billboard(const Billboard3D& billboard) noexcept;
 
     [[nodiscard]] const Vertex3D* data() const noexcept { return vertices_.data(); }
     [[nodiscard]] std::size_t vertex_count() const noexcept { return vertex_count_; }
     [[nodiscard]] std::size_t box_count() const noexcept { return box_count_; }
+    [[nodiscard]] std::size_t billboard_count() const noexcept {
+        return billboard_count_;
+    }
     [[nodiscard]] bool overflowed() const noexcept { return overflowed_; }
 
 private:
     std::array<Vertex3D, kMaxVertices> vertices_{};
     std::size_t vertex_count_ = 0;
     std::size_t box_count_ = 0;
+    std::size_t billboard_count_ = 0;
     bool overflowed_ = false;
 };
 

@@ -4,32 +4,41 @@ The top screen uses Citro3D geometry rather than Citro2D room primitives. The sh
 
 ## Camera contract
 
-- The view direction is fixed along the Z axis toward the shelter cutaway.
+- The view remains fixed but uses a shallow oblique yaw/pitch toward the
+  shelter cutaway, exposing real floor, ceiling and side-wall depth in mono.
 - Player input may pan in X/Y and adjust zoom, but cannot rotate, orbit or tilt the camera.
 - Left and right eyes render the same scene with separate stereo projection matrices derived from the physical 3D slider.
 - Room fronts remain open so the rear wall, floor, ceiling, side columns and equipment are visible.
 
 ## Geometry and memory budget
 
-`SceneMesh3D` owns a fixed-capacity array of 4096 vertices and performs no heap allocation while building a frame.
+`SceneMesh3D` owns a fixed-capacity array of 8192 vertices and performs no heap allocation while building a frame.
 
 - One box: 12 triangles / 36 vertices.
-- Absolute fixed-capacity maximum: 113 complete boxes (4068 vertices).
+- Absolute fixed-capacity maximum: 227 complete boxes (8172 vertices).
 - Vertex format: XYZ position, UV coordinates, XYZ unit normal and normalized RGBA tint: twelve 32-bit floats / 48 bytes.
-- Maximum CPU mesh storage: 196,608 bytes.
-- Maximum linear-memory VBO: 196,608 bytes.
-- Generated material texture: 64×16 RGB565 / 2,048 bytes.
-- Compressed source atlas: 512 bytes of 4 bpp indices plus a 32-byte RGB565 palette.
-- Total fixed renderer data is approximately 386 KiB, excluding Citro3D target buffers.
+- Maximum CPU mesh storage: 393,216 bytes.
+- Maximum linear-memory VBO: 393,216 bytes.
+- Project-supplied room texture/prop atlas: 512×256 RGBA5551 / 262,144 bytes.
+- Generated dweller texture: 256×256 RGBA5551 / 131,072 bytes.
+- Dweller CPU/VBO batch: at most 72 vertices per eye submission.
+- Total fixed scene and dweller renderer data is approximately 1.15 MiB,
+  excluding Citro3D target buffers.
 - Overflow is detected by `SceneMesh3D::overflowed()` instead of writing past the buffer.
 
-The current reference scene is camera-culled before geometry generation and submits all visible geometry in one draw call per eye. The material atlas is bound once per eye and does not add draw calls. The lower-screen interface remains in Citro2D and is outside this scene budget.
+The current scene is camera-culled before geometry generation. Structural,
+prop and foreground geometry use up to three draw calls per eye. Dwellers use
+one additional alpha-tested draw call. The lower-screen interface remains in
+Citro2D and is outside this scene budget.
 
 ## Surface normals and lighting
 
 Each generated box face receives one exact axis-aligned unit normal: front/back use ±Z, side walls use ±X, and floor/ceiling use ±Y. The host test validates all 36 vertices of a generated box and verifies that every normal has unit length.
 
-The vertex shader applies a fixed directional light aligned with the permanently side-facing camera. Lighting is intentionally inexpensive: `ambient 0.55 + max(dot(normal, light), 0) × diffuse 0.45`. The higher ambient component was selected after Azahar screenshot review to keep rock, excavated cells and side walls readable on the small Nintendo 3DS display. The directional term still separates floors, ceilings, side walls and front-facing equipment. There are no dynamic lights, shadow maps, extra textures or additional draw calls.
+The vertex shader applies a fixed directional light and quantizes it into three
+bands: 0.78, 0.89 and 1.0. This keeps supplied textures readable while still
+separating floors, ceilings, side walls and front-facing equipment. There are
+no dynamic lights, shadow maps or normal maps.
 
 ## Depth layers
 
@@ -38,16 +47,35 @@ The implementation uses several real Z ranges:
 1. rock mass behind the shelter;
 2. rear wall and structural shell;
 3. room equipment;
-4. production indicator and resident geometry nearest the open front.
+4. production indicator and alpha-tested resident billboard nearest the open
+   front.
 
 Every generated box has a non-zero depth. Visibility and stereoscopy therefore come from model/view/projection transforms and the depth buffer, not from manually offsetting 2D rectangles.
 
-## Generated material atlas
+## Room asset atlas
 
-The 64×16 atlas contains four 16×16 materials: rock, steel, floor grating and control-panel detail. Source pixels are stored as a shared 16-colour RGB565 palette and packed 4 bpp indices. At startup they are decoded directly into the PICA200 8×8 Morton-tiled texture allocation. No texture files are read and no texture memory is allocated during a frame.
+The 512×256 atlas contains eight supplied 64×64 surface materials and twelve
+transparent equipment/furniture cells. The build embeds a PICA200-tiled
+RGBA5551 binary, so no texture file is read and no texture memory is allocated
+during a frame.
 
-Each box face receives UV coordinates within one material tile. Nearest filtering and a small UV inset avoid bleeding between adjacent tiles while preserving crisp details at Nintendo 3DS resolution.
+Shell faces select a material tile. Recognizable props are alpha-tested
+billboards with explicit world sizes and Z layers. Bilinear filtering plus
+transparent padding and half-texel UV insets limit atlas bleeding.
+
+## Animated dwellers
+
+Residents are not box placeholders. A dedicated unlit pass draws original
+24×32 pixel-art frames as camera-facing quads. Five job archetypes share one
+RGBA5551 texture; idle, work and walk each have four frames. Both stereo eyes
+receive the same simulation tick, so animation never diverges between eyes.
+Alpha-tested visible pixels write depth on an explicit character layer between
+room props and the front floor lip/glow pass.
+See [`GENERATED_DWELLER_ATLAS.md`](GENERATED_DWELLER_ATLAS.md).
 
 ## Asset policy
 
-The geometry and material artwork are original assets created specifically for Deep Shelter 3D. The project does not contain extracted models, textures, interface art, logos or other material from Fallout Shelter or another commercial game.
+Geometry and generated residents remain original project work. Room textures
+and props are the project-owner-supplied issue #85 pack, recorded in the asset
+manifest under `LicenseRef-Project-Owner-Permission`. The runtime contains no
+commercial-game extraction, logo or interface fragment.
