@@ -153,8 +153,12 @@ jobs:
           # crop. Repeating the touch builds all five remaining room profiles.
           xdotool mousemove --sync 740 600
           for room in $(seq 1 5); do
-            xdotool click 1
-            sleep 0.5
+            # Hold across several emulated frames; an instantaneous X11 click
+            # can press and release between two hidScanInput() calls.
+            xdotool mousedown 1
+            sleep 0.2
+            xdotool mouseup 1
+            sleep 0.4
           done
           sleep 3
 
