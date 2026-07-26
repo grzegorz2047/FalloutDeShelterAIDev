@@ -147,12 +147,13 @@ jobs:
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
 
-          # Focus the secondary Build button, then create all five remaining
-          # rooms so the visual artifact covers every furnished room profile.
-          xdotool key Down
-          sleep 0.5
+          # Click the centre of the lower-screen Build control. Keyboard focus
+          # mappings vary between Azahar releases, while the fixed Xvfb/window
+          # geometry below is also the source of the deterministic screenshot
+          # crop. Repeating the touch builds all five remaining room profiles.
+          xdotool mousemove --sync 740 600
           for room in $(seq 1 5); do
-            xdotool key z
+            xdotool click 1
             sleep 0.5
           done
           sleep 3
