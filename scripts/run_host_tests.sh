@@ -70,7 +70,8 @@ if [[ "$UI_BOOTSTRAPPED" == "1" ]]; then
   rm -f scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py ui-patch-error.txt
   git config user.name github-actions[bot]
   git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-  git add source/main.cpp scripts/run_host_tests.sh scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py ui-patch-error.txt
+  git add source/main.cpp scripts/run_host_tests.sh
+  git add -u scripts/apply_room_lifecycle_ui.py scripts/apply_room_lifecycle_ui_include.py
   git commit -m "Expose playable room lifecycle controls"
   git push origin HEAD:agent/playable-room-lifecycle
 fi
