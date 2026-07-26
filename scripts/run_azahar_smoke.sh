@@ -59,7 +59,9 @@ xdpyinfo -display "$DISPLAY" >/dev/null
 
 HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
 azahar_pid=$!
-for second in $(seq 1 18); do
+perf_path=""
+phase_one_path=""
+for second in $(seq 1 30); do
   sleep 1
   if ! kill -0 "$azahar_pid" 2>/dev/null; then
     wait "$azahar_pid" || true
@@ -68,17 +70,25 @@ for second in $(seq 1 18); do
     cat azahar-3dsx-launch.log >&2
     exit 1
   fi
+  perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
+  phase_one_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke.log' -print -quit)
+  if [ -n "$perf_path" ] && [ -n "$phase_one_path" ]; then
+    break
+  fi
 done
 
-perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
-test -n "$perf_path"
+if [ -z "$perf_path" ] || [ -z "$phase_one_path" ]; then
+  echo "Azahar did not produce smoke readiness markers within 30 seconds." >&2
+  timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
+  cat azahar-window-tree.log >&2 || true
+  cat azahar-3dsx-launch.log >&2
+  exit 1
+fi
 cp "$perf_path" azahar-performance.log
 grep -q 'DEEP_SHELTER_PERF mode=mono' azahar-performance.log
 grep -q 'DEEP_SHELTER_PERF mode=stereo' azahar-performance.log
 cat azahar-performance.log
 
-phase_one_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke.log' -print -quit)
-test -n "$phase_one_path"
 cp "$phase_one_path" azahar-playable-smoke.log
 cat azahar-playable-smoke.log
 grep -q 'phase=build status=ok' azahar-playable-smoke.log
@@ -104,7 +114,8 @@ stop_azahar
 
 HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-resume.log 2>&1 &
 azahar_pid=$!
-for second in $(seq 1 6); do
+phase_two_path=""
+for second in $(seq 1 15); do
   sleep 1
   if ! kill -0 "$azahar_pid" 2>/dev/null; then
     wait "$azahar_pid" || true
@@ -113,10 +124,19 @@ for second in $(seq 1 6); do
     cat azahar-3dsx-resume.log >&2
     exit 1
   fi
+  phase_two_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke_resume.log' -print -quit)
+  if [ -n "$phase_two_path" ]; then
+    break
+  fi
 done
 
-phase_two_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke_resume.log' -print -quit)
-test -n "$phase_two_path"
+if [ -z "$phase_two_path" ]; then
+  echo "Azahar did not produce the resume marker within 15 seconds." >&2
+  timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
+  cat azahar-window-tree.log >&2 || true
+  cat azahar-3dsx-resume.log >&2
+  exit 1
+fi
 cp "$phase_two_path" azahar-playable-smoke-resume.log
 cat azahar-playable-smoke-resume.log
 grep -q 'phase=resume status=ok' azahar-playable-smoke-resume.log
