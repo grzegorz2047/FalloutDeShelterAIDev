@@ -24,54 +24,38 @@ jobs:
 
           session = Path('source/PlayableShelterSession.cpp')
           text = session.read_text()
-          old = '''    } else if (current.status != PlayableSaveStatus::Missing) {
-              std::remove(temp.c_str());
-              return PlayableSaveStatus::IoError;
-          } else {
+          old = '''    } else {
               std::remove(backup.c_str());
           }
-          if (std::rename(temp.c_str(), main.c_str()) != 0) {
-          '''
-          new = '''    } else if (current.status != PlayableSaveStatus::Missing) {
-              std::remove(temp.c_str());
-              return PlayableSaveStatus::IoError;
-          }
-          if (std::rename(temp.c_str(), main.c_str()) != 0) {
-          '''
-          if old not in text:
-              raise SystemExit('save backup-preservation block not found')
+          if (std::rename(temp.c_str(), main.c_str()) != 0) {'''
+          new = '''    }
+          if (std::rename(temp.c_str(), main.c_str()) != 0) {'''
+          if text.count(old) != 1:
+              raise SystemExit(f'unexpected backup-removal matches: {text.count(old)}')
           session.write_text(text.replace(old, new, 1))
 
           tests = Path('tests/playable_shelter_session_tests.cpp')
           text = tests.read_text()
-          old = '''    assert(decoded_backup.status == PlayableSaveStatus::Ok);
-              assert(decoded_backup.state.room_entries[1].production_steps == 73);
-
-              std::ofstream broken(path + ".sav",
-          '''
-          new = '''    assert(decoded_backup.status == PlayableSaveStatus::Ok);
-              assert(decoded_backup.state.room_entries[1].production_steps == 73);
-
-              assert(std::remove((path + ".sav").c_str()) == 0);
+          marker = '''    std::ofstream broken(path + ".sav",
+                               std::ios::binary | std::ios::trunc);'''
+          insertion = '''    assert(std::remove((path + ".sav").c_str()) == 0);
               assert(save_playable_state(path, newer.state()) ==
                      PlayableSaveStatus::Ok);
               assert(access((path + ".sav").c_str(), F_OK) == 0);
               assert(access((path + ".bak").c_str(), F_OK) == 0);
-              std::ifstream preserved_backup_file(
-                  path + ".bak", std::ios::binary);
+              std::ifstream preserved_backup_file(path + ".bak", std::ios::binary);
               const std::vector<std::uint8_t> preserved_backup_bytes(
                   (std::istreambuf_iterator<char>(preserved_backup_file)),
                   std::istreambuf_iterator<char>());
-              const auto preserved_backup =
-                  decode_playable_state(preserved_backup_bytes);
+              const auto preserved_backup = decode_playable_state(
+                  preserved_backup_bytes);
               assert(preserved_backup.status == PlayableSaveStatus::Ok);
               assert(preserved_backup.state.room_entries[1].production_steps == 73);
 
-              std::ofstream broken(path + ".sav",
-          '''
-          if old not in text:
-              raise SystemExit('backup regression insertion point not found')
-          tests.write_text(text.replace(old, new, 1))
+          ''' + marker
+          if text.count(marker) != 1:
+              raise SystemExit(f'unexpected broken-save marker matches: {text.count(marker)}')
+          tests.write_text(text.replace(marker, insertion, 1))
           PY
       - name: Run host tests
         run: bash scripts/run_host_tests.sh
