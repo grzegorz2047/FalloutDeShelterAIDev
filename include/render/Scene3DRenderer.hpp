@@ -217,9 +217,7 @@ inline void emit_bucket(const char* mode, FrameBucket& bucket) noexcept {
             std::fwrite(message, 1, safe_length, file);
             std::fclose(file);
         }
-        // The SD log is the canonical telemetry sink. Calling
-        // svcOutputDebugString here made Azahar jump through a null address
-        // immediately after the mono bucket on some binary layouts.
+        svcOutputDebugString(message, static_cast<s32>(safe_length));
     }
 
     FrameState& value = state();

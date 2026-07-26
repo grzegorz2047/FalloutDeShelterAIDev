@@ -17,16 +17,7 @@ constexpr const char* kSmokePhaseOneLogPath =
     "sdmc:/DeepShelter3D_playable_smoke.log";
 constexpr const char* kSmokePhaseTwoLogPath =
     "sdmc:/DeepShelter3D_playable_smoke_resume.log";
-constexpr const char* kStartupTracePath =
-    "sdmc:/DeepShelter3D_startup_trace.log";
 constexpr const char* kSmokeSavePath = "sdmc:/DS3D_smoke";
-
-void append_startup_trace(const char* stage) noexcept {
-    FILE* trace = std::fopen(kStartupTracePath, "ab");
-    if (trace == nullptr) return;
-    std::fprintf(trace, "%s\n", stage);
-    std::fclose(trace);
-}
 
 bool consume_flag(const char* path) noexcept {
     FILE* flag = std::fopen(path, "rb");
@@ -52,18 +43,14 @@ const char* resident_state_label(PlayableResidentState state) noexcept {
 }
 
 void run_phase_one(PlayableShelterState& output) noexcept {
-    append_startup_trace("phase1-enter");
     std::remove(kSmokePhaseOneLogPath);
     std::remove(kSmokePhaseTwoLogPath);
     std::remove((std::string(kSmokeSavePath) + ".sav").c_str());
     std::remove((std::string(kSmokeSavePath) + ".bak").c_str());
     std::remove((std::string(kSmokeSavePath) + ".tmp").c_str());
-    append_startup_trace("phase1-cleanup-done");
 
-    append_startup_trace("phase1-before-session");
     PlayableShelterSession smoke{
         PlayableShelterState{PlayableShelterState::RawDefaultsTag{}}};
-    append_startup_trace("phase1-after-session");
     const auto build = [&](PlayableRoomType type,
                            int column,
                            int floor) noexcept {
@@ -72,14 +59,10 @@ void run_phase_one(PlayableShelterState& output) noexcept {
                smoke.confirm_build() == BuildResult::Built;
     };
 
-    bool ok = build(PlayableRoomType::Elevator, 1, 0);
-    append_startup_trace(ok ? "phase1-build-1-ok" : "phase1-build-1-failed");
-    if (ok) ok = build(PlayableRoomType::Elevator, 1, 1);
-    append_startup_trace(ok ? "phase1-build-2-ok" : "phase1-build-2-failed");
-    if (ok) ok = build(PlayableRoomType::Power, 2, 1);
-    append_startup_trace(ok ? "phase1-build-3-ok" : "phase1-build-3-failed");
-    if (ok) ok = build(PlayableRoomType::Food, 3, 1);
-    append_startup_trace(ok ? "phase1-build-4-ok" : "phase1-build-4-failed");
+    bool ok = build(PlayableRoomType::Elevator, 1, 0) &&
+              build(PlayableRoomType::Elevator, 1, 1) &&
+              build(PlayableRoomType::Power, 2, 1) &&
+              build(PlayableRoomType::Food, 3, 1);
 
     const int credits_before_invalid = smoke.state().credits;
     const int rooms_before_invalid = smoke.state().rooms;
@@ -93,22 +76,17 @@ void run_phase_one(PlayableShelterState& output) noexcept {
         invalid_result == BuildResult::InvalidPlacement &&
         smoke.state().credits == credits_before_invalid &&
         smoke.state().rooms == rooms_before_invalid;
-    append_startup_trace("phase1-invalid-placement-done");
 
     const int food_room = smoke.room_index_at(3, 1);
     ok = ok && invalid_unchanged && food_room >= 0 &&
          smoke.assign_resident_to_room(0u, food_room);
-    append_startup_trace(ok ? "phase1-assignment-ok" : "phase1-assignment-failed");
     if (ok) {
         for (int step = 0; step < 7; ++step) smoke.fixed_step();
     }
-    append_startup_trace("phase1-steps-done");
 
-    append_startup_trace("phase1-before-save-1");
     const PlayableSaveStatus first_save_status =
         ok ? save_playable_state(kSmokeSavePath, smoke.state())
            : PlayableSaveStatus::IoError;
-    append_startup_trace("phase1-after-save-1");
     const bool first_saved =
         first_save_status == PlayableSaveStatus::Ok;
     const std::string backup_path =
@@ -116,11 +94,9 @@ void run_phase_one(PlayableShelterState& output) noexcept {
     FILE* unexpected_backup = std::fopen(backup_path.c_str(), "rb");
     const bool backup_absent_after_first = unexpected_backup == nullptr;
     if (unexpected_backup != nullptr) std::fclose(unexpected_backup);
-    append_startup_trace("phase1-before-save-2");
     const PlayableSaveStatus second_save_status =
         first_saved ? save_playable_state(kSmokeSavePath, smoke.state())
                     : PlayableSaveStatus::IoError;
-    append_startup_trace("phase1-after-save-2");
     FILE* rotated_backup = std::fopen(backup_path.c_str(), "rb");
     const bool backup_rotated = rotated_backup != nullptr;
     if (rotated_backup != nullptr) std::fclose(rotated_backup);
@@ -129,9 +105,7 @@ void run_phase_one(PlayableShelterState& output) noexcept {
     const bool resume_armed = saved && create_flag(kSmokeResumeFlagPath);
     ok = ok && first_saved && backup_absent_after_first &&
          backup_rotated && saved && resume_armed;
-    append_startup_trace("phase1-before-output-copy");
     if (ok) output = smoke.state();
-    append_startup_trace("phase1-after-output-copy");
 
     int elevator_count = 0;
     int power_count = 0;
@@ -175,15 +149,11 @@ void run_phase_one(PlayableShelterState& output) noexcept {
             static_cast<int>(second_save_status));
         std::fclose(log);
     }
-    append_startup_trace("phase1-exit");
 }
 
 void run_phase_two(PlayableShelterState& output) noexcept {
-    append_startup_trace("phase2-enter");
     std::remove(kSmokePhaseTwoLogPath);
-    append_startup_trace("phase2-before-load");
     const PlayableLoadResult loaded = load_playable_state(kSmokeSavePath);
-    append_startup_trace("phase2-after-load");
     const bool restored =
         loaded.status == PlayableSaveStatus::Ok &&
         loaded.state.rooms == 5 &&
@@ -193,12 +163,10 @@ void run_phase_two(PlayableShelterState& output) noexcept {
         loaded.state.residents[0].state == PlayableResidentState::Transit &&
         loaded.state.residents[0].movement_ticks == 7;
 
-    append_startup_trace("phase2-before-session");
     PlayableShelterSession resumed(
         restored ? loaded.state
                  : PlayableShelterState{
                        PlayableShelterState::RawDefaultsTag{}});
-    append_startup_trace("phase2-after-session");
     const PlayableResidentPosition idle_before =
         resumed.resident_position(1u);
     bool entered_lower_elevator = false;
@@ -216,7 +184,6 @@ void run_phase_two(PlayableShelterState& output) noexcept {
         entered_upper_elevator = entered_upper_elevator ||
             (moving.current_column == 1 && moving.current_floor == 1);
     }
-    append_startup_trace("phase2-steps-done");
     const PlayableResidentPosition idle_after =
         resumed.resident_position(1u);
 
@@ -248,9 +215,7 @@ void run_phase_two(PlayableShelterState& output) noexcept {
     const bool ok = restored && arrived && idle_moved && idle_unassigned &&
                     entered_lower_elevator && used_vertical_elevator &&
                     entered_upper_elevator && overview_selected;
-    append_startup_trace("phase2-before-output-copy");
     if (ok) output = resumed.state();
-    append_startup_trace("phase2-after-output-copy");
 
     FILE* log = std::fopen(kSmokePhaseTwoLogPath, "wb");
     if (log != nullptr) {
@@ -278,7 +243,6 @@ void run_phase_two(PlayableShelterState& output) noexcept {
             resident_state_label(idle.state));
         std::fclose(log);
     }
-    append_startup_trace("phase2-exit");
 }
 #endif
 
@@ -286,19 +250,11 @@ void run_phase_two(PlayableShelterState& output) noexcept {
 
 PlayableShelterState::PlayableShelterState() {
 #if defined(__3DS__)
-    append_startup_trace("state-default-enter");
-    const bool resume_requested = consume_flag(kSmokeResumeFlagPath);
-    append_startup_trace(
-        resume_requested ? "state-resume-flag-1" : "state-resume-flag-0");
-    if (resume_requested) {
+    if (consume_flag(kSmokeResumeFlagPath)) {
         run_phase_two(*this);
-    } else {
-        const bool smoke_requested = consume_flag(kSmokeFlagPath);
-        append_startup_trace(
-            smoke_requested ? "state-smoke-flag-1" : "state-smoke-flag-0");
-        if (smoke_requested) run_phase_one(*this);
+    } else if (consume_flag(kSmokeFlagPath)) {
+        run_phase_one(*this);
     }
-    append_startup_trace("state-default-exit");
 #endif
 }
 

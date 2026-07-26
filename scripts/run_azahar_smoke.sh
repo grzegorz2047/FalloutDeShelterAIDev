@@ -38,28 +38,6 @@ stop_azahar() {
   azahar_pid=""
 }
 
-capture_exception_dialog() {
-  local exception_window
-  exception_window=$(xdotool search --name '^An exception occurred$' | head -n1 || true)
-  if [ -n "$exception_window" ]; then
-    import -display "$DISPLAY" -window "$exception_window" azahar-exception.png || true
-  else
-    import -display "$DISPLAY" -window root azahar-exception.png || true
-  fi
-}
-
-collect_startup_trace() {
-  local trace_path
-  trace_path=$(find azahar-home -type f -name 'DeepShelter3D_startup_trace.log' -print -quit)
-  if [ -n "$trace_path" ]; then
-    cp "$trace_path" azahar-startup-trace.log
-    echo "Startup trace:" >&2
-    cat azahar-startup-trace.log >&2
-  else
-    echo "Startup trace was not created." >&2
-  fi
-}
-
 cleanup() {
   stop_azahar || true
   kill "$xvfb_pid" 2>/dev/null || true
@@ -81,39 +59,26 @@ xdpyinfo -display "$DISPLAY" >/dev/null
 
 HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-launch.log 2>&1 &
 azahar_pid=$!
-perf_path=""
-phase_one_path=""
-for second in $(seq 1 30); do
+for second in $(seq 1 18); do
   sleep 1
   if ! kill -0 "$azahar_pid" 2>/dev/null; then
     wait "$azahar_pid" || true
     azahar_pid=""
     echo "Azahar exited before producing the build/transit state." >&2
-    collect_startup_trace
     cat azahar-3dsx-launch.log >&2
     exit 1
   fi
-  perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
-  phase_one_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke.log' -print -quit)
-  if [ -n "$perf_path" ] && [ -n "$phase_one_path" ]; then
-    break
-  fi
 done
 
-if [ -z "$perf_path" ] || [ -z "$phase_one_path" ]; then
-  echo "Azahar did not produce smoke readiness markers within 30 seconds." >&2
-  timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
-  capture_exception_dialog
-  collect_startup_trace
-  cat azahar-window-tree.log >&2 || true
-  cat azahar-3dsx-launch.log >&2
-  exit 1
-fi
+perf_path=$(find azahar-home -type f -name 'DeepShelter3D_perf.log' -print -quit)
+test -n "$perf_path"
 cp "$perf_path" azahar-performance.log
 grep -q 'DEEP_SHELTER_PERF mode=mono' azahar-performance.log
 grep -q 'DEEP_SHELTER_PERF mode=stereo' azahar-performance.log
 cat azahar-performance.log
 
+phase_one_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke.log' -print -quit)
+test -n "$phase_one_path"
 cp "$phase_one_path" azahar-playable-smoke.log
 cat azahar-playable-smoke.log
 grep -q 'phase=build status=ok' azahar-playable-smoke.log
@@ -139,32 +104,19 @@ stop_azahar
 
 HOME="$PWD/azahar-home" setsid ./squashfs-root/AppRun -w "$PWD/dist/DeepShelter3D.3dsx" > azahar-3dsx-resume.log 2>&1 &
 azahar_pid=$!
-phase_two_path=""
-for second in $(seq 1 15); do
+for second in $(seq 1 6); do
   sleep 1
   if ! kill -0 "$azahar_pid" 2>/dev/null; then
     wait "$azahar_pid" || true
     azahar_pid=""
     echo "Azahar exited before validating the resumed state." >&2
-    collect_startup_trace
     cat azahar-3dsx-resume.log >&2
     exit 1
   fi
-  phase_two_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke_resume.log' -print -quit)
-  if [ -n "$phase_two_path" ]; then
-    break
-  fi
 done
 
-if [ -z "$phase_two_path" ]; then
-  echo "Azahar did not produce the resume marker within 15 seconds." >&2
-  timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log || true
-  capture_exception_dialog
-  collect_startup_trace
-  cat azahar-window-tree.log >&2 || true
-  cat azahar-3dsx-resume.log >&2
-  exit 1
-fi
+phase_two_path=$(find azahar-home -type f -name 'DeepShelter3D_playable_smoke_resume.log' -print -quit)
+test -n "$phase_two_path"
 cp "$phase_two_path" azahar-playable-smoke-resume.log
 cat azahar-playable-smoke-resume.log
 grep -q 'phase=resume status=ok' azahar-playable-smoke-resume.log
@@ -186,8 +138,6 @@ grep -q 'idle_state=roaming' azahar-playable-smoke-resume.log
 timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
 if grep -Eq 'An exception occurred|ExceptionRaised|NoExecuteFault' azahar-window-tree.log azahar-3dsx-launch.log azahar-3dsx-resume.log; then
   echo "Azahar reported an emulated application exception." >&2
-  capture_exception_dialog
-  collect_startup_trace
   cat azahar-window-tree.log >&2
   cat azahar-3dsx-launch.log >&2
   cat azahar-3dsx-resume.log >&2
