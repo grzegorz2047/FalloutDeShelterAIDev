@@ -95,6 +95,8 @@ private:
 
 namespace telemetry {
 
+constexpr const char* kPerformanceLogPath = "sdmc:/DeepShelter3D_perf.log";
+
 struct FrameBucket {
     double cpu_submission_ms = 0.0;
     double gpu_drawing_pct = 0.0;
@@ -112,11 +114,20 @@ struct FrameState {
     bool current_stereo = false;
     bool previous_stereo = false;
     bool previous_valid = false;
+    bool benchmark_stereo = false;
+    bool log_initialized = false;
 };
 
 [[nodiscard]] inline FrameState& state() noexcept {
     static FrameState value{};
     return value;
+}
+
+inline void initialize_log() noexcept {
+    FrameState& value = state();
+    if (value.log_initialized) return;
+    std::remove(kPerformanceLogPath);
+    value.log_initialized = true;
 }
 
 inline void emit_bucket(const char* mode, FrameBucket& bucket) noexcept {
@@ -136,9 +147,14 @@ inline void emit_bucket(const char* mode, FrameBucket& bucket) noexcept {
         bucket.gpu_processing_pct / divisor,
         static_cast<double>(bucket.command_buffer_peak_pct));
     if (length > 0) {
-        const s32 safe_length = static_cast<s32>(
+        const std::size_t safe_length = static_cast<std::size_t>(
             length < static_cast<int>(sizeof(message)) ? length : sizeof(message) - 1);
-        svcOutputDebugString(message, safe_length);
+        FILE* file = std::fopen(kPerformanceLogPath, "ab");
+        if (file != nullptr) {
+            std::fwrite(message, 1, safe_length, file);
+            std::fclose(file);
+        }
+        svcOutputDebugString(message, static_cast<s32>(safe_length));
     }
     bucket = {};
 }
@@ -161,6 +177,7 @@ inline void record_previous_frame() noexcept {
 }
 
 inline bool frame_begin(u8 flags) noexcept {
+    initialize_log();
     record_previous_frame();
     const bool begun = C3D_FrameBegin(flags);
     if (begun) {
@@ -206,6 +223,22 @@ inline void frame_end(u8 flags) noexcept {
     C3D_FrameEnd(flags);
 }
 
+inline u32 keys_down() noexcept {
+    u32 down = hidKeysDown();
+    const u32 held = hidKeysHeld();
+    if ((down & KEY_SELECT) != 0 &&
+        (held & KEY_L) != 0 &&
+        (held & KEY_R) != 0) {
+        state().benchmark_stereo = !state().benchmark_stereo;
+        down &= ~KEY_SELECT;
+    }
+    return down;
+}
+
+[[nodiscard]] inline float slider_state() noexcept {
+    return state().benchmark_stereo ? 1.0f : osGet3DSliderState();
+}
+
 }  // namespace telemetry
 
 }  // namespace deep_shelter::render
@@ -222,3 +255,7 @@ inline void frame_end(u8 flags) noexcept {
         (eye_separation), (screen_distance), (is_left_handed))
 #define C3D_FrameEnd(flags) \
     ::deep_shelter::render::telemetry::frame_end((flags))
+#define hidKeysDown() \
+    ::deep_shelter::render::telemetry::keys_down()
+#define osGet3DSliderState() \
+    ::deep_shelter::render::telemetry::slider_state()
