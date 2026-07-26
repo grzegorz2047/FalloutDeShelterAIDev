@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 
+#if defined(__3DS__)
+#include "ui/EmbeddedText.hpp"
+#endif
+
 namespace deep_shelter::ui {
 
 struct Rect {
