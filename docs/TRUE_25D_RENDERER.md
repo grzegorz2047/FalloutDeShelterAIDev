@@ -62,7 +62,7 @@ Residents are not box placeholders. A dedicated unlit pass draws original
 RGBA5551 texture; idle, work and walk each have four frames. Both stereo eyes
 receive the same simulation tick, so animation never diverges between eyes.
 Alpha-tested visible pixels write depth on an explicit character layer between
-room props and the foreground/glow pass.
+room props and the front floor lip/glow pass.
 See [`GENERATED_DWELLER_ATLAS.md`](GENERATED_DWELLER_ATLAS.md).
 
 ## Asset policy

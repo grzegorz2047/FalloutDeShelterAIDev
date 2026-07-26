@@ -13,6 +13,7 @@ namespace {
 
 constexpr float kDwellerWorldWidth = 21.0f;
 constexpr float kDwellerWorldHeight = 34.0f;
+constexpr float kDwellerDepthLayer = 3.5f;
 
 Vertex3D dweller_vertex(float x,
                         float y,
@@ -172,7 +173,7 @@ void DwellerBillboardRenderer::build(
             room_x + room_visual_profile(room).resident_clear_x;
         append_dweller(resident_x,
                         room_y + 17.0f,
-                        1.5f,
+                        kDwellerDepthLayer,
                         room,
                         true,
                         state.animation_tick,
@@ -188,7 +189,7 @@ void DwellerBillboardRenderer::build(
                        kDwellerWorldHeight)) {
         append_dweller(layout::kElevatorX + 4.5f,
                         elevator_y,
-                        1.5f,
+                        kDwellerDepthLayer,
                         5,
                         false,
                         state.animation_tick,
