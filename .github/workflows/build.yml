@@ -152,36 +152,40 @@ jobs:
           test -n "$window_id"
           xdotool windowfocus --sync "$window_id"
 
+          press_key() {
+            xdotool keydown "$1"
+            sleep 0.20
+            xdotool keyup "$1"
+            sleep 0.25
+          }
+
+          timeout 10s import -display "$DISPLAY" -window root azahar-initial-frame.png
+          test -s azahar-initial-frame.png
+
           # Azahar defaults: A=Z, R=W and D-pad left/down/right=F/G/H.
-          # Move focus to BUDUJ, then create a connected elevator shaft,
-          # a power room and a food room entirely through player controls.
-          xdotool key h
-          xdotool key z
-          sleep 0.5
-          for press in $(seq 1 5); do xdotool key w; done
-          xdotool key z
-          sleep 0.5
+          # Hold every key across several emulated frames so hidScanInput()
+          # cannot miss a press/release pair between two scans.
+          press_key h
+          press_key z
+          for press in $(seq 1 5); do press_key w; done
+          press_key z
 
-          xdotool key z
-          xdotool key g
-          xdotool key z
-          sleep 0.5
+          press_key z
+          press_key g
+          press_key z
 
-          xdotool key z
-          xdotool key w
-          xdotool key h
-          xdotool key z
-          sleep 0.5
+          press_key z
+          press_key w
+          press_key h
+          press_key z
 
-          xdotool key z
-          xdotool key w
-          xdotool key h
-          xdotool key z
-          sleep 0.5
+          press_key z
+          press_key w
+          press_key h
+          press_key z
 
-          # Return focus from BUDUJ to the primary action and assign a resident.
-          xdotool key f
-          xdotool key z
+          press_key f
+          press_key z
           sleep 4
 
           timeout 10s xwininfo -display "$DISPLAY" -root -tree > azahar-window-tree.log
@@ -200,6 +204,18 @@ jobs:
             -filter point -resize 1020x750 azahar-bottom-screen-3x.png
           test "$(identify -format '%wx%h' azahar-top-screen-3x.png)" = "1260x750"
           test "$(identify -format '%wx%h' azahar-bottom-screen-3x.png)" = "1020x750"
+
+          convert azahar-initial-frame.png -crop 110x55+475+412 +repage azahar-initial-credits.png
+          convert azahar-first-frame.png -crop 110x55+475+412 +repage azahar-final-credits.png
+          credit_pixels=$(compare -metric AE azahar-initial-credits.png azahar-final-credits.png null: 2>&1 || true)
+          top_pixels=$(compare -metric AE \
+            'azahar-initial-frame.png[420x250+430+185]' \
+            'azahar-first-frame.png[420x250+430+185]' null: 2>&1 || true)
+          echo "Changed credit-region pixels: $credit_pixels"
+          echo "Changed top-screen pixels: $top_pixels"
+          test "${credit_pixels:-0}" -gt 20
+          test "${top_pixels:-0}" -gt 500
+
           top_colors=$(identify -format '%k' azahar-top-screen-3x.png)
           bottom_colors=$(identify -format '%k' azahar-bottom-screen-3x.png)
           echo "Captured free-form shelter top screen with $top_colors colors"
