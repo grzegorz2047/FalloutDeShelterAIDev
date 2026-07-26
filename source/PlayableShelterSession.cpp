@@ -299,6 +299,62 @@ bool vertical_edge_allowed(const PlayableShelterState& state,
            is_elevator_cell(state, to_column, to_floor);
 }
 
+int connected_component_count(const PlayableShelterState& state) noexcept {
+    constexpr int kCellCount =
+        kPlayableGridColumns * kPlayableGridFloors;
+    std::array<bool, kCellCount> visited{};
+    std::array<int, kCellCount> queue{};
+    constexpr std::array<int, 4> kColumnDelta{{-1, 1, 0, 0}};
+    constexpr std::array<int, 4> kFloorDelta{{0, 0, -1, 1}};
+    int components = 0;
+
+    for (int floor = 0; floor < kPlayableGridFloors; ++floor) {
+        for (int column = 0; column < kPlayableGridColumns; ++column) {
+            const int start = grid_index(column, floor);
+            if (visited[static_cast<std::size_t>(start)] ||
+                !traversable_cell(state, column, floor)) {
+                continue;
+            }
+            ++components;
+            int head = 0;
+            int tail = 0;
+            queue[static_cast<std::size_t>(tail++)] = start;
+            visited[static_cast<std::size_t>(start)] = true;
+            while (head < tail) {
+                const int current = queue[static_cast<std::size_t>(head++)];
+                const int current_column = current % kPlayableGridColumns;
+                const int current_floor = current / kPlayableGridColumns;
+                for (std::size_t direction = 0;
+                     direction < kColumnDelta.size(); ++direction) {
+                    const int candidate_column =
+                        current_column + kColumnDelta[direction];
+                    const int candidate_floor =
+                        current_floor + kFloorDelta[direction];
+                    if (!in_grid(candidate_column, candidate_floor) ||
+                        !traversable_cell(
+                            state, candidate_column, candidate_floor)) {
+                        continue;
+                    }
+                    if (candidate_floor != current_floor &&
+                        !vertical_edge_allowed(
+                            state, current_column, current_floor,
+                            candidate_column, candidate_floor)) {
+                        continue;
+                    }
+                    const int candidate =
+                        grid_index(candidate_column, candidate_floor);
+                    if (visited[static_cast<std::size_t>(candidate)]) {
+                        continue;
+                    }
+                    visited[static_cast<std::size_t>(candidate)] = true;
+                    queue[static_cast<std::size_t>(tail++)] = candidate;
+                }
+            }
+        }
+    }
+    return components;
+}
+
 bool next_route_step(const PlayableShelterState& state,
                      int start_column,
                      int start_floor,
@@ -1029,6 +1085,9 @@ PlayableShelterSession::preview_demolish_selected() const noexcept {
     PlayableShelterState candidate = state_;
     candidate.room_entries[static_cast<std::size_t>(selected_index)] = {};
     normalize_room_groups(candidate);
+    const bool disconnects_shelter =
+        connected_component_count(candidate) >
+        connected_component_count(state_);
     for (const auto& resident : state_.residents) {
         if (!resident.active) continue;
         const bool touches_removed =
@@ -1051,6 +1110,8 @@ PlayableShelterSession::preview_demolish_selected() const noexcept {
         preview.result = RoomLifecycleResult::UnsafeStoredResources;
     } else if (preview.production_steps_affected > 0) {
         preview.result = RoomLifecycleResult::UnsafeProduction;
+    } else if (disconnects_shelter) {
+        preview.result = RoomLifecycleResult::DisconnectedShelter;
     } else {
         preview.result = RoomLifecycleResult::Applied;
     }

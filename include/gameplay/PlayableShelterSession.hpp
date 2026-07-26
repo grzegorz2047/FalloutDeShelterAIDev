@@ -44,6 +44,7 @@ enum class RoomLifecycleResult {
     UnsafeResidents,
     UnsafeStoredResources,
     UnsafeProduction,
+    DisconnectedShelter,
     LastRoom,
 };
 
