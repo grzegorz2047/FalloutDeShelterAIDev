@@ -329,6 +329,30 @@ void playable_room_groups_upgrade_and_demolish_are_atomic() {
     assert(blocked.state().room_entries[static_cast<std::size_t>(blocked_room)].active);
     assert(blocked.state().room_entries[static_cast<std::size_t>(blocked_room)].stored == 1);
     assert(valid_playable_state(blocked.state()));
+
+    PlayableShelterState bridge_state;
+    bridge_state.credits = 1000;
+    PlayableShelterSession bridge_builder(bridge_state);
+    assert(bridge_builder.select_build_type(PlayableRoomType::Workshop));
+    assert(bridge_builder.set_build_cursor(1, 0));
+    assert(bridge_builder.confirm_build() == BuildResult::Built);
+    assert(bridge_builder.set_build_cursor(2, 0));
+    assert(bridge_builder.confirm_build() == BuildResult::Built);
+    const int bridge_room = bridge_builder.room_index_at(1, 0);
+    assert(bridge_room >= 0);
+    PlayableShelterState bridge_selected = bridge_builder.state();
+    bridge_selected.selected_room = bridge_room;
+    PlayableShelterSession guarded_bridge(bridge_selected);
+    const int bridge_credits = guarded_bridge.state().credits;
+    const auto bridge_preview = guarded_bridge.preview_demolish_selected();
+    assert(bridge_preview.result ==
+           RoomLifecycleResult::DisconnectedShelter);
+    assert(guarded_bridge.confirm_demolish_selected() ==
+           RoomLifecycleResult::DisconnectedShelter);
+    assert(guarded_bridge.state().credits == bridge_credits);
+    assert(guarded_bridge.room_index_at(1, 0) == bridge_room);
+    assert(guarded_bridge.room_index_at(2, 0) >= 0);
+    assert(valid_playable_state(guarded_bridge.state()));
 }
 
 void legacy_saves_migrate_to_v3_and_atomic_backup_recovers() {

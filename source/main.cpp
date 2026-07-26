@@ -149,6 +149,8 @@ const char* lifecycle_result_notice(RoomLifecycleResult result) {
             return "Najpierw odbierz lub przenies zasoby.";
         case RoomLifecycleResult::UnsafeProduction:
             return "Najpierw zakoncz aktywna produkcje.";
+        case RoomLifecycleResult::DisconnectedShelter:
+            return "Ten segment laczy czesci schronu. Zbuduj inne przejscie.";
         case RoomLifecycleResult::LastRoom:
             return "Nie mozna zburzyc ostatniego pokoju.";
     }
